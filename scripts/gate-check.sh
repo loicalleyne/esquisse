@@ -257,6 +257,16 @@ else
     fi
 fi
 
+# ── Check 8: Adversarial review infrastructure ───────────────────────────────
+section "Check 8: Adversarial review infrastructure"
+if [[ -x "scripts/gate-review.sh" ]]; then
+    pass "scripts/gate-review.sh is present and executable."
+else
+    fail "scripts/gate-review.sh is missing or not executable." \
+         "Run init.sh to restore adversarial review infrastructure," \
+         "or: cp /path/to/esquisse/scripts/gate-review.sh scripts/ && chmod +x scripts/gate-review.sh"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "════════════════════════════════════════"

@@ -7,7 +7,7 @@
 # that already exist).
 #
 # Usage:
-#   bash scripts/init.sh [--project-name NAME] [--module-path PATH]
+#   bash scripts/init.sh [--project-name NAME] [--module-path PATH] [--target-dir DIR]
 # =============================================================================
 
 set -euo pipefail
@@ -18,14 +18,16 @@ readonly SCRIPT_NAME="$(basename "$0")"
 # ── Defaults ──────────────────────────────────────────────────────────────────
 PROJECT_NAME="${PROJECT_NAME:-$(basename "$PWD")}"
 MODULE_PATH="${MODULE_PATH:-}"
+TARGET_DIR="${TARGET_DIR:-$PWD}"
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --project-name) PROJECT_NAME="$2"; shift 2 ;;
         --module-path)  MODULE_PATH="$2";  shift 2 ;;
+        --target-dir)   TARGET_DIR="$2";   shift 2 ;;
         -h|--help)
-            echo "Usage: $SCRIPT_NAME [--project-name NAME] [--module-path PATH]"
+            echo "Usage: $SCRIPT_NAME [--project-name NAME] [--module-path PATH] [--target-dir DIR]"
             exit 0 ;;
         *)
             echo "Unknown option: $1" >&2
@@ -58,6 +60,10 @@ create_file() {
 
 # ── Directory scaffold ────────────────────────────────────────────────────────
 echo "Bootstrapping Esquisse project: $PROJECT_NAME"
+echo "Target directory: $TARGET_DIR"
+mkdir -p "$TARGET_DIR"
+TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+cd "$TARGET_DIR"
 echo ""
 echo "Directories:"
 
@@ -218,19 +224,124 @@ None.
 "
 
 # ── Copy scripts alongside (idempotent) ──────────────────────────────────────
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-for script in new-task.sh gate-check.sh; do
-    src="${SELF_DIR}/${script}"
-    dst="scripts/${script}"
-    if [[ -f "$src" && ! -f "$dst" ]]; then
-        cp "$src" "$dst"
-        chmod +x "$dst"
-        echo "  created  $dst"
+echo ""
+echo "Scripts:"
+for item in new-task.sh gate-check.sh rebuild-ast.sh macros.sql macros_go.sql; do
+    src="${SCRIPT_DIR}/${item}"
+    dst="${TARGET_DIR}/scripts/${item}"
+    if [[ -f "$src" ]]; then
+        if [[ ! -f "$dst" ]]; then
+            cp "$src" "$dst"
+            # Shell scripts get execute permission; SQL files do not.
+            [[ "$item" == *.sh ]] && chmod +x "$dst"
+            echo "  created  scripts/$item"
+        else
+            echo "  exists   scripts/$item  (skipped)"
+        fi
+    else
+        echo "  missing  scripts/$item  (not found in Esquisse dir $SCRIPT_DIR)"
     fi
 done
+
+# ── Copy skills alongside (idempotent) ───────────────────────────────────────
+echo ""
+echo "Skills:"
+for skill_dir in init-project new-task adopt-project write-spec explore-codebase implement-task; do
+    src="${SCRIPT_DIR}/../skills/${skill_dir}"
+    dst="${TARGET_DIR}/skills/${skill_dir}"
+    if [[ -d "$src" ]]; then
+        if [[ ! -d "$dst" ]]; then
+            cp -r "$src" "$dst"
+            echo "  created  skills/${skill_dir}/"
+        else
+            echo "  exists   skills/${skill_dir}/  (skipped)"
+        fi
+    else
+        echo "  missing  skills/${skill_dir}/  (not found in Esquisse dir)"
+    fi
+done
+
+# ── Adversarial review infrastructure ────────────────────────────────────────
+echo ""
+echo "Adversarial review:"
+ESQUISSE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Directories
+for dir in .github/agents .github/hooks; do
+    create_dir "${TARGET_DIR}/${dir}"
+done
+
+# Agent files
+for agent in EsquissePlan.agent.md Adversarial-r0.agent.md Adversarial-r1.agent.md Adversarial-r2.agent.md; do
+    src="${ESQUISSE_DIR}/.github/agents/${agent}"
+    dst="${TARGET_DIR}/.github/agents/${agent}"
+    if [[ -f "$src" ]]; then
+        if [[ ! -f "$dst" ]]; then
+            cp "$src" "$dst"
+            echo "  created  .github/agents/${agent}"
+        else
+            echo "  exists   .github/agents/${agent}  (skipped)"
+        fi
+    else
+        echo "  missing  .github/agents/${agent}  (not found in Esquisse dir)"
+    fi
+done
+
+# Hooks fallback
+src="${ESQUISSE_DIR}/.github/hooks/hooks.json"
+dst="${TARGET_DIR}/.github/hooks/hooks.json"
+if [[ -f "$src" ]]; then
+    if [[ ! -f "$dst" ]]; then
+        cp "$src" "$dst"
+        echo "  created  .github/hooks/hooks.json"
+    else
+        echo "  exists   .github/hooks/hooks.json  (skipped)"
+    fi
+else
+    echo "  missing  .github/hooks/hooks.json  (not found in Esquisse dir)"
+fi
+
+# Adversarial review skill package
+src="${ESQUISSE_DIR}/skills/adversarial-review"
+dst="${TARGET_DIR}/skills/adversarial-review"
+if [[ -d "$src" ]]; then
+    if [[ ! -d "$dst" ]]; then
+        cp -r "$src" "$dst"
+        echo "  created  skills/adversarial-review/"
+    else
+        echo "  exists   skills/adversarial-review/  (skipped)"
+    fi
+else
+    echo "  missing  skills/adversarial-review/  (not found in Esquisse dir)"
+fi
+
+# gate-review.sh alongside other scripts
+src="${SCRIPT_DIR}/gate-review.sh"
+dst="${TARGET_DIR}/scripts/gate-review.sh"
+if [[ -f "$src" ]]; then
+    if [[ ! -f "$dst" ]]; then
+        cp "$src" "$dst"
+        chmod +x "$dst"
+        echo "  created  scripts/gate-review.sh"
+    else
+        echo "  exists   scripts/gate-review.sh  (skipped)"
+    fi
+else
+    echo "  missing  scripts/gate-review.sh  (not found in Esquisse dir)"
+fi
+
+# Gitignore the local adversarial state folder (idempotent)
+gitignore="${TARGET_DIR}/.gitignore"
+if grep -qxF '.adversarial/' "$gitignore" 2>/dev/null; then
+    echo "  exists   .adversarial/ in .gitignore  (skipped)"
+else
+    echo '.adversarial/' >> "$gitignore"
+    echo "  ensured  .adversarial/ in .gitignore"
+fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "Done. Fill in every TODO: before starting the first agent session."
-echo "Next step: bash scripts/new-task.sh 0 foundation"
+echo "Next steps:"
+echo "  cd ${TARGET_DIR}"
+echo "  bash scripts/new-task.sh 0 foundation"

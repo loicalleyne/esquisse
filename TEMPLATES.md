@@ -255,7 +255,7 @@ Audit:       go vet ./...
 - **Critical JOIN rule**: `node_id` is per-file. All JOINs on `node_id` MUST also
   match on `file_path` or results will be silently wrong.
 
-Load Go-specific macros: `.read scripts/macros_go.sql` (see FRAMEWORK.md §17).
+Load Go-specific macros: `.read scripts/macros_go.sql` (see [FRAMEWORK.md §12](FRAMEWORK.md#12-ast-aided-codebase-navigation)).
 ```
 
 ### Python

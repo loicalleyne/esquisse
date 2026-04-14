@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "wsl bash ./scripts/gate-review.sh"
+      }
+    ]
+  }
+}

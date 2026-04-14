@@ -1,4 +1,5 @@
 -- =============================================================================
+-- Canonical source: duckdb-code/macros/macros.sql
 -- macros.sql — Esquisse universal AST analysis macros.
 --
 -- Reusable DuckDB TABLE macros for codebase analysis via sitting_duck.

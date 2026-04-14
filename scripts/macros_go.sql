@@ -1,4 +1,5 @@
 -- =============================================================================
+-- Canonical source: duckdb-code/macros/macros_go.sql
 -- macros_go.sql — Esquisse Go-specific AST analysis macros.
 --
 -- TABLE macros for Go type analysis, interface discovery, and struct inspection.

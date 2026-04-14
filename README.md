@@ -31,23 +31,52 @@ Esquisse fixes this with a document structure and working protocol that encodes 
 
 ---
 
+## Installation
+
+Esquisse is a framework you clone once and reference from any project.
+
+```bash
+# 1. Clone Esquisse to a shared location (once per machine)
+git clone https://github.com/yourorg/esquisse /opt/esquisse
+# or wherever you keep shared tooling — ~/tools/esquisse, ~/src/esquisse, etc.
+```
+
+All scripts are then invoked by their full path, or from the project dir after `init.sh` copies them in.
+
+---
+
 ## Quick Start
 
 ```bash
-# Bootstrap a new project from your project root
-bash /path/to/esquisse/scripts/init.sh --project-name myproject
+# 2. Bootstrap a new project (creates the dir if it doesn't exist)
+bash /opt/esquisse/scripts/init.sh \
+  --project-name myproject \
+  --target-dir ~/projects/myproject
 
-# Scaffold the first task document
+# After init, the project is self-contained — Esquisse no longer needed on PATH.
+cd ~/projects/myproject
+
+# 3. Scaffold the first task document
 bash scripts/new-task.sh 0 foundation
 
-# Fill it in (prompt your agent):
+# 4. Fill it in — prompt your agent:
 # "Fill in docs/tasks/P0-001-foundation.md.
 #  Goal: [one sentence]. In scope: [...]. Out of scope: [...].
 #  Acceptance criteria as test function names."
 
-# Validate the phase gate before promoting
+# 5. Validate the phase gate before promoting
 bash scripts/gate-check.sh 0
 ```
+
+**Alternatively**, if you prefer to `cd` first:
+
+```bash
+mkdir ~/projects/myproject && cd ~/projects/myproject
+bash /opt/esquisse/scripts/init.sh --project-name myproject
+# No --target-dir needed; defaults to $PWD.
+```
+
+`init.sh` copies all Esquisse scripts (`new-task.sh`, `gate-check.sh`, `rebuild-ast.sh`, `macros.sql`, `macros_go.sql`) into the project's `scripts/` directory. The project is then standalone.
 
 ---
 
@@ -94,7 +123,7 @@ Reading order for an agent starting a task: `AGENTS.md` → `ONBOARDING.md` → 
 - **3-attempt bail-out.** After 3 failed attempts at the same problem: stop, revert to a stub, record it in `NEXT_STEPS.md` as Blocked, yield to the human.
 - **Bug fixes require a failing test first.** Write the red test, then fix the code.
 
-Full list: [`FRAMEWORK.md` §11](FRAMEWORK.md#11-guardrails-and-hard-rules) — 16 rules.
+Full list: [`FRAMEWORK.md` §6](FRAMEWORK.md#6-guardrails-and-hard-rules) — 16 rules.
 
 ---
 
@@ -146,7 +175,7 @@ Universal macros: `find_definitions`, `find_calls`, `code_structure`, `complexit
 
 Go macros: `go_struct_fields`, `go_func_signatures`, `go_type_flow`, `go_interfaces`, `go_interface_impls`.
 
-Details: [`FRAMEWORK.md` §17](FRAMEWORK.md#17-ast-aided-codebase-navigation).
+Details: [`FRAMEWORK.md` §12](FRAMEWORK.md#12-ast-aided-codebase-navigation).
 
 ---
 
@@ -160,7 +189,7 @@ Three phases, each taking a day or less:
 
 Golden rule: **never fake it**. Build commands must be copy-paste runnable. Phase labels must reflect where the project actually is.
 
-Details: [`FRAMEWORK.md` §15](FRAMEWORK.md#15-adopting-in-an-existing-project).
+Details: [`FRAMEWORK.md` §10](FRAMEWORK.md#10-adopting-in-an-existing-project).
 
 ---
 
@@ -175,4 +204,4 @@ Go · Python · TypeScript · Rust · C/C++ · React/TypeScript
 
 ## Influenced By
 
-- *["APIs Are Environments Now"](https://medium.com/@tfmv/apis-are-environments-now-b60c94bd4804)* (Thomas McGeehan) — agent-facing interface design principles (Hard Rules 8–11, Go conventions §12).
+- *["APIs Are Environments Now"](https://medium.com/@tfmv/apis-are-environments-now-b60c94bd4804)* (Thomas McGeehan) — agent-facing interface design principles (Hard Rules 8–11, Go conventions §7).

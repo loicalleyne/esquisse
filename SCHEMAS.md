@@ -399,8 +399,21 @@ description: >
 triggers:
   - "{phrase 1}"
   - "{phrase 2}"
+  - not: "{phrase that must NOT trigger this skill — name the correct skill}"
 tools_required:
   - {tool_name}
+# tools_required validation rules:
+#   - List only tools the skill actively calls. Do not list tools "just in case."
+#   - Use the canonical tool name as it appears in the agent framework
+#     (e.g. read_file, replace_string_in_file, run_in_terminal, runSubagent).
+#   - A skill that only reads files needs: [read_file].
+#   - A skill that writes files needs: [read_file, replace_string_in_file, create_file].
+#   - A skill that runs shell commands needs: [run_in_terminal].
+#   - A skill that delegates to a sub-agent needs: [runSubagent].
+#   - If an agent framework does not provide a required tool, the skill must
+#     degrade gracefully: describe what the tool would do and ask the user to
+#     perform the step manually. Never silently skip a required step.
+updated: {YYYY-MM-DD}
 ---
 ```
 
@@ -441,13 +454,17 @@ If {condition}, then {branch A}, else {branch B}.
 
 ### Standard Skills for Every Project
 
-| Skill File | Purpose |
-|-----------|---------|
-| `explore-codebase.md` | First contact orientation — phases from landscape to deep-dive |
-| `implement-task.md` | Read task doc → implement → verify acceptance criteria |
-| `debug-issue.md` | Reproduce → trace → identify root cause → fix → regression test |
-| `review-changes.md` | Review a diff or PR: changed files → semantic diff → risk assessment |
-| `refactor-safely.md` | Interface-preserving refactor: tests first, then implementation |
+| Skill File | Status | Purpose |
+|-----------|--------|---------|
+| [`skills/write-spec/SKILL.md`](skills/write-spec/SKILL.md) | Done | Conversational feature spec: constraint audit → feature-type detection → approach options → deep interview → `docs/specs/` |
+| [`skills/explore-codebase/SKILL.md`](skills/explore-codebase/SKILL.md) | Done | First contact orientation — 3 levels: landscape → structure (AST) → hot-path trace |
+| [`skills/implement-task/SKILL.md`](skills/implement-task/SKILL.md) | Done | Read task doc → implement (types → code → tests) → full 18-step completion protocol |
+| `skills/run-phase-gate/SKILL.md` | Planned | Run all phase-gate checks; block phase promotion until every criterion passes |
+| `skills/write-adr/SKILL.md` | Planned | Conversational ADR authoring: "we chose X over Y because" → `docs/decisions/ADR-{nnnn}-{slug}.md` |
+| `skills/update-llms/SKILL.md` | Planned | Regenerate `llms.txt` + `llms-full.txt` after a public API change (language-agnostic) |
+| `skills/debug-issue/SKILL.md` | Planned | Reproduce → trace root cause → fix → regression test |
+| `skills/review-changes/SKILL.md` | Planned | Review a diff or PR: changed files → semantic diff → risk assessment |
+| `skills/refactor-safely/SKILL.md` | Planned | Interface-preserving refactor: tests first, then implementation |
 ---
 
 ## 7. PR / Handoff Schema
@@ -492,3 +509,65 @@ reading the source code. It must not be so verbose that reviewers stop reading i
 - "What Changed" section: max 5 bullets. If you need more, the PR is too large.
 - "How to Test" section: must be a runnable command, not a prose description.
 - Do not include implementation reasoning here. That belongs in Session Notes or an ADR.
+
+---
+
+## 8. Adversarial Review State Schema (`.adversarial/state.json`)
+
+**Canonical source of truth.** `gate-review.sh`, `Adversarial-r*.agent.md`, and
+`task-review-protocol.md` all reference this schema. When they conflict, this
+section wins.
+
+### Required fields (read by `gate-review.sh`)
+
+```json
+{
+  "iteration":        <int>,          // Increments on every review. Start at 0 if absent.
+  "last_model":       "<string>",     // Model name that produced the most recent verdict.
+  "last_verdict":     "PASSED|CONDITIONAL|FAILED",
+  "last_review_date": "YYYY-MM-DD"
+}
+```
+
+These four fields are the **minimum required** for the Stop hook to function.
+Any write to `state.json` that omits or renames any of them will cause the hook
+to read `last_verdict` as empty and block with "verdict is 'absent'".
+
+### Recommended additional fields
+
+```json
+{
+  "iteration":        3,
+  "last_model":       "Adversarial-r0",
+  "last_verdict":     "PASSED",
+  "last_review_date": "2026-04-13",
+  "plan":             "docs/planning/{slug}.md",
+  "history": [
+    {
+      "iteration":  <int>,
+      "reviewer":   "<string>",
+      "verdict":    "PASSED|CONDITIONAL|FAILED",
+      "summary":    "<one sentence>",
+      "prior_issues_resolved": [],
+      "new_issues": []
+    }
+  ]
+}
+```
+
+### Field rules
+
+| Field | Type | Written by | Read by |
+|-------|------|-----------|---------|
+| `iteration` | int | Adversarial-r* agents | gate-review.sh, EsquissePlan, adversarial-review skill |
+| `last_model` | string | Adversarial-r* agents | EsquissePlan (to avoid repeat critique) |
+| `last_verdict` | enum | Adversarial-r* agents | gate-review.sh |
+| `last_review_date` | YYYY-MM-DD | Adversarial-r* agents | — |
+| `history[]` | array | Adversarial-r* agents | EsquissePlan, humans |
+
+### Who writes this file
+
+Only `Adversarial-r*` agents write `state.json` — never EsquissePlan, never the
+adversarial-review skill, never a human or the main agent directly.
+If a manual write is unavoidable (e.g., recovering from a stuck session), use
+this schema exactly.

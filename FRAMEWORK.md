@@ -11,18 +11,18 @@ This framework defines a project structure, document schema, and working convent
 1. [Philosophy](#1-philosophy)
 2. [Document Hierarchy](#2-document-hierarchy)
 3. [Directory Layout](#3-directory-layout)
-4–9. [Document Schemas → SCHEMAS.md](SCHEMAS.md)
-10. [Phase Structure and Gates](#10-phase-structure-and-gates)
-11. [Guardrails and Hard Rules](#11-guardrails-and-hard-rules)
-12. [Go-Specific Conventions](#12-go-specific-conventions)
-13. [llms.txt / llms-full.txt Convention](#13-llmstxt--llms-fulltxt-convention)
-14. [Project Initialization Checklist](#14-project-initialization-checklist)
+4. [Document Schemas → SCHEMAS.md](SCHEMAS.md)
+5. [Phase Structure and Gates](#5-phase-structure-and-gates)
+6. [Guardrails and Hard Rules](#6-guardrails-and-hard-rules)
+7. [Go-Specific Conventions](#7-go-specific-conventions)
+8. [llms.txt / llms-full.txt Convention](#8-llmstxt--llms-fulltxt-convention)
+9. [Project Initialization Checklist](#9-project-initialization-checklist)
     - [Per-Task Startup Protocol](#per-task-startup-protocol)
     - [Per-Task Completion Protocol](#per-task-completion-protocol)
     - [Artifact Update Trigger Table](#artifact-update-trigger-table)
-15. [Adopting in an Existing Project](#15-adopting-in-an-existing-project)
-16. [Helper Scripts](#16-helper-scripts)
-17. [AST-Aided Codebase Navigation](#17-ast-aided-codebase-navigation)
+10. [Adopting in an Existing Project](#10-adopting-in-an-existing-project)
+11. [Helper Scripts](#11-helper-scripts)
+12. [AST-Aided Codebase Navigation](#12-ast-aided-codebase-navigation)
 
 [Templates and Language Adapters → TEMPLATES.md](TEMPLATES.md)
 
@@ -120,13 +120,13 @@ project-root/
 
 ---
 
-## Document Schemas
+## 4. Document Schemas
 
 All document schemas (AGENTS.md, ONBOARDING.md, GLOSSARY.md, Task, ADR, Skill) are defined in **[SCHEMAS.md](SCHEMAS.md)**. Reference that file when creating or auditing any framework document.
 
 ---
 
-## 10. Phase Structure and Gates
+## 5. Phase Structure and Gates
 
 ### Phase Numbering
 
@@ -184,7 +184,7 @@ Completed {date}. Key outcomes:
 
 ---
 
-## 11. Guardrails and Hard Rules
+## 6. Guardrails and Hard Rules
 
 These rules apply to ALL tasks in ALL projects using this framework. They belong in `AGENTS.md` as the first section.
 
@@ -301,7 +301,7 @@ Rules for tasks to stay within model context limits:
 
 ---
 
-## 12. Go-Specific Conventions
+## 7. Go-Specific Conventions
 
 When the primary language is Go, add the following to `AGENTS.md`:
 
@@ -444,7 +444,7 @@ before writing any import statements.
 
 ---
 
-## 13. llms.txt / llms-full.txt Convention
+## 8. llms.txt / llms-full.txt Convention
 
 These files serve as LLM-optimized API references. They allow a model to understand your public API without reading source files.
 
@@ -513,7 +513,7 @@ func (t *{TypeName}) {Method}({params}) {returns}
 
 ---
 
-## 14. Project Initialization Checklist
+## 9. Project Initialization Checklist
 
 Run this checklist when bootstrapping a new project with this framework.
 
@@ -578,7 +578,7 @@ When an agent begins a task, it should execute this protocol before writing any 
    attributed to your changes.
 
 6. Locate each file in the "Files" table — read headers/interfaces.
-   If a `code_ast.duckdb` cache exists at the project root (see §17), prefer
+   If a `code_ast.duckdb` cache exists at the project root (see [§12](#12-ast-aided-codebase-navigation)), prefer
    AST queries for structural questions ("what implements this interface?",
    "what calls this function?") before reading raw files. This preserves token
    budget for the implementation itself.
@@ -685,7 +685,7 @@ Quick reference: which artifact to update and when.
 
 ---
 
-## 15. Adopting in an Existing Project
+## 10. Adopting in an Existing Project
 
 ### The Core Constraint
 
@@ -767,21 +767,64 @@ Faking these produces documents that actively mislead agents, which is worse tha
 
 ---
 
-## 16. Helper Scripts
+## 11. Helper Scripts
 
-Three scripts in `scripts/` automate the mechanical friction of following the framework. They have no opinions about your code — they only scaffold and verify documents.
+Scripts in `scripts/` handle mechanical scaffolding. Skill guides in `skills/` define conversational workflows — they are the preferred way to initialize a project or define a task from within a chat session.
+
+### Conversational Workflows (preferred)
+
+| Skill | Trigger phrases | What it does |
+|---|---|---|
+| [`skills/init-project/SKILL.md`](skills/init-project/SKILL.md) | "initialize a new project", "bootstrap a project", "fill in the stubs" | Interviews the user, runs `init.sh`, fills in all TODO placeholders in a single session |
+| [`skills/adopt-project/SKILL.md`](skills/adopt-project/SKILL.md) | "add esquisse to this project", "adopt esquisse", "onboard this codebase" | Extracts info from existing codebase (deps, types, build commands), runs `init.sh`, fills documents from archaeology not invention |
+| [`skills/new-task/SKILL.md`](skills/new-task/SKILL.md) | "create a new task", "define task", "I need to implement X" | Auto-detects current phase, interviews the user, runs `new-task.sh`, fills in the task document |
+| [`skills/adversarial-review/SKILL.md`](skills/adversarial-review/SKILL.md) | "review this plan", "adversarial review", "check this plan before implementation" | Reads `.adversarial/state.json` for rotation slot, dispatches the appropriate `Adversarial-r{slot}`; applies 7-attack protocol; writes verdict to `.adversarial/` |
+| [`skills/write-spec/SKILL.md`](skills/write-spec/SKILL.md) | "write a spec for", "I want to add a feature", "spec out", "help me design", "write a feature specification", "before we implement" | Constraint audit → feature-type detection → 2-3 distinct approach options → deep interview → writes approved spec to `docs/specs/` |
+| [`skills/explore-codebase/SKILL.md`](skills/explore-codebase/SKILL.md) | "explore the codebase", "orient me", "where is", "how does this work", "map the architecture", "what calls" | 3-level progressive orientation: landscape (AGENTS.md + llms.txt) → structure (AST queries) → hot-path trace. AST-first when cache exists. |
+| [`skills/implement-task/SKILL.md`](skills/implement-task/SKILL.md) | "implement task", "start working on", "execute this task", "let's implement", "do the work for task" | Startup protocol → edit (types → code → tests → docs) → full 18-step completion protocol including AGENTS.md, ADR, NEXT_STEPS.md, llms.txt, and phase-gate handoff |
+
+Invoke by telling the agent: *"Use the init-project skill"* or *"Use the new-task skill for phase 1, goal: implement the Kafka ingester."*
+
+> **VS Code prerequisite for EsquissePlan enforcement:** enable `"chat.useCustomAgentHooks": true` in VS Code settings. This activates the agent-scoped Stop hook in `.github/agents/EsquissePlan.agent.md` (strict mode — blocks exit if no review). The `.github/hooks/hooks.json` global fallback fires for all agents without this setting but fast-passes sessions that have no `.adversarial/state.json` (i.e., non-planning sessions).
+
+> **Hook scripts require Linux/WSL.** All hook commands in `.github/hooks/hooks.json` and agent frontmatter use `bash ./scripts/...` to ensure VS Code invokes WSL bash on Windows. The agent-facing terminal profile in VS Code must be set to WSL (Ubuntu). `gate-review.sh` has a platform guard that rejects execution under MINGW/MSYS/Cygwin. If hooks fail with "must run under Linux or WSL", set `"terminal.integrated.defaultProfile.windows": "Ubuntu-22.04 (WSL)"` in VS Code settings.
 
 ### `scripts/init.sh`
 
-Bootstraps a new project in the current directory. Creates the full directory scaffold and copies starter templates from TEMPLATES.md into place. Run once, at project creation.
+Bootstraps a new project. Creates the full directory scaffold, starter documents, and copies all Esquisse scripts **and skill files** into the target project's `scripts/` and `skills/` directories. Run once, at project creation.
+
+**Installation workflow:**
 
 ```sh
-bash scripts/init.sh
+# Clone Esquisse to a shared location (once per machine):
+git clone https://github.com/yourorg/esquisse /opt/esquisse
+
+# Bootstrap a new project (creates the target dir if needed):
+bash /opt/esquisse/scripts/init.sh \
+  --project-name myproject \
+  --target-dir ~/projects/myproject
+
+# The project is now self-contained. Esquisse no longer needed on PATH:
+cd ~/projects/myproject
+bash scripts/new-task.sh 0 foundation
 ```
 
-Creates: `docs/tasks/`, `docs/adr/`, `skills/`, `plan/`, `AGENTS.md`, `ONBOARDING.md`, `GLOSSARY.md`, `docs/planning/ROADMAP.md`, `NEXT_STEPS.md`.
+Alternatively, `cd` to the project directory first and omit `--target-dir` (defaults to `$PWD`):
 
-**What it does not do:** fill in project-specific content. Every generated file contains a `TODO:` placeholder for each required section. The agent or developer fills those in.
+```sh
+mkdir ~/projects/myproject && cd ~/projects/myproject
+bash /opt/esquisse/scripts/init.sh --project-name myproject
+```
+
+`init.sh` copies into `scripts/`: `new-task.sh`, `gate-check.sh`, `rebuild-ast.sh`, `gate-review.sh`, `macros.sql`, `macros_go.sql`.
+`init.sh` copies into `skills/`: `init-project/SKILL.md`, `new-task/SKILL.md`, `adopt-project/SKILL.md`, `adversarial-review/` (full skill package directories).
+`init.sh` copies into `.github/agents/`: `EsquissePlan.agent.md`, `Adversarial-r0.agent.md`, `Adversarial-r1.agent.md`, `Adversarial-r2.agent.md`.
+`init.sh` copies into `.github/hooks/`: `hooks.json`.
+`init.sh` appends `.adversarial/` to `.gitignore`.
+
+Creates: `docs/tasks/`, `docs/adr/`, `docs/planning/`, `skills/`, `AGENTS.md`, `ONBOARDING.md`, `GLOSSARY.md`, `docs/planning/ROADMAP.md`, `NEXT_STEPS.md`.
+
+**What it does not do:** fill in project-specific content. Use the `init-project` skill (above) in a chat session to fill in all `TODO:` placeholders after the script runs.
 
 ### `scripts/new-task.sh <phase> <slug>`
 
@@ -794,45 +837,31 @@ bash scripts/new-task.sh 1 kafka-ingester
 
 The created file is a copy of the task document minimal template (from TEMPLATES.md) with `Phase`, `Seq`, and `Slug` pre-filled.
 
-**To fill in the task document,** prompt the agent like this:
-
-> Fill in the task document at `docs/tasks/P1-003-kafka-ingester.md`.
-> Goal: [one sentence — what does this task produce].
-> In scope: [bullet list].
-> Out of scope: [bullet list].
-> Acceptance criteria must be written as test function names, not prose.
-> Note any known interface constraints in the Interface Sketch section.
-
-Do not ask the agent to "plan the implementation" in the same prompt — that conflates scoping (the task doc's job) with implementation (the next session's job). Do not pre-specify the sequence number; the script sets it.
-
-| Include in the prompt | Why |
-|---|---|
-| One-sentence goal | Forces a precise `Goal:` line; vague goals produce vague implementations |
-| Explicit in/out of scope | Prevents scope creep in `Implementation Notes` |
-| "test function names" | Prevents prose acceptance criteria that cannot be verified |
-| Known interface constraints | Agent fills `Interface Sketch` correctly instead of inventing signatures |
+**Prefer the `new-task` skill** for conversational task definition — it elicits all fields in one interview and fills the document automatically. Use `new-task.sh` directly only in scripts or CI contexts where no chat session is available.
 
 ### `scripts/gate-check.sh [phase]`
 
-Validates the phase gate criteria from §10 before you promote to the next phase. Exits non-zero on any failure — usable in CI or as a pre-commit hook.
+Validates the phase gate criteria from §5 before you promote to the next phase. Exits non-zero on any failure — usable in CI or as a pre-commit hook.
 
 ```sh
 bash scripts/gate-check.sh 1
 ```
 
 **Checks performed:**
-1. `go build ./...` succeeds (no stubs left in a broken state).
-2. `go test ./...` passes.
-3. No `panic("TODO` strings remain in `*.go` files.
-4. `// ASSUMPTION:` and `// TODO` count is printed (informational; not a hard fail unless >0 is passed as `--strict`).
-5. `go test -coverprofile` is run; prints coverage percentage. Exits non-zero if coverage is below the threshold (default 80%; override with `COVERAGE_THRESHOLD=70`).
-6. All task docs in `docs/tasks/P{phase}-*` have `Status: Completed` — warns on any that do not.
+1. `go build ./...` succeeds.
+2. `golangci-lint run ./...` passes — auto-discovers `.golangci.yml` at the project root; no `--config` flag needed. Falls back to `go vet ./...` with a warning if `golangci-lint` is not installed.
+3. `go test ./...` passes.
+4. No `panic("TODO` strings remain in `*.go` files.
+5. `// ASSUMPTION:` and `// TODO` count is printed (informational; not a hard fail unless `--strict` is passed).
+6. `go test -coverprofile` is run; prints coverage percentage. Exits non-zero if coverage is below the threshold (default 80%; override with `COVERAGE_THRESHOLD=70`).
+7. All task docs in `docs/tasks/P{phase}-*` have `Status: Completed` — warns on any that do not.
+8. `scripts/gate-review.sh` is present and executable — confirms adversarial review infrastructure is installed.
 
 Python and TypeScript projects: set `LANG_ADAPTER=python` or `LANG_ADAPTER=ts` to substitute the appropriate build/test commands.
 
 ---
 
-## 17. AST-Aided Codebase Navigation
+## 12. AST-Aided Codebase Navigation
 
 For large codebases, reading source files to answer structural questions
 (*"what implements this interface?"*, *"what calls this function?"*, *"where is this type defined?"*)
@@ -920,7 +949,7 @@ If a project has a `code_ast.duckdb` cache, add an entry to the
 
 Prefer AST queries over file reads for: finding definitions, locating callers,
 mapping interface implementations, and orientation queries.
-Rebuild cache with: `bash scripts/rebuild-ast.sh` (or see §17 of FRAMEWORK.md).
+Rebuild cache with: `bash scripts/rebuild-ast.sh` (or see [§12](#12-ast-aided-codebase-navigation)).
 ```
 
 ### Reusable Macros
