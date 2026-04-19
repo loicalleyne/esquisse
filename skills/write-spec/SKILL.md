@@ -2,27 +2,14 @@
 name: write-spec
 description: >
   Conversational feature specification. USE when a user has a feature idea that
-  needs to be designed before implementation. Triggers on: "I want to add a feature",
-  "write a spec for X", "spec out X", "help me design X", "before we implement X
-  let's define it", "what approach should we take for X".
-  DO NOT invoke this skill when: planning task decomposition (use new-task or
-  EsquissePlan instead); a spec already exists and the user wants tasks created from
-  it (use new-task or EsquissePlan); reviewing code after implementation.
-triggers:
-  - "write a spec for"
-  - "I want to add a feature"
-  - "spec out"
-  - "help me design"
-  - "write a feature specification"
-  - "before we implement"
-  - not: "implement task — use implement-task skill instead"
-  - not: "create a task document — use new-task skill instead"
-  - not: "write an ADR — use write-adr skill instead"
-tools_required:
-  - read_file
-  - create_file
-  - replace_string_in_file
-updated: 2026-04-13
+  needs to be designed before implementation. Triggers on: "I want to add a
+  feature", "write a spec for X", "write a feature specification", "spec out X",
+  "help me design X", "before we implement X let's define it", "what approach
+  should we take for X".
+  DO NOT invoke this skill when: implementing a task (use implement-task instead);
+  planning task decomposition (use new-task or EsquissePlan instead); a spec
+  already exists and the user wants tasks created from it (use new-task or
+  EsquissePlan instead); writing an ADR; reviewing code after implementation.
 ---
 
 # Write-Spec
@@ -40,6 +27,8 @@ The spec is the required input to `EsquissePlan` / `new-task`.
 - [ ] `AGENTS.md` exists and has `## Invariants` and `## Scope Exclusions` sections.
 - [ ] `docs/specs/` directory exists (create it if not).
 - [ ] The user has a feature idea — even a vague one is enough to start.
+
+**Tools:** `read_file`, `create_file`, `replace_string_in_file`
 
 ## Workflow
 
@@ -206,3 +195,7 @@ On approval:
 - [ ] All 8 spec sections are populated.
 - [ ] Acceptance criteria are specific and testable.
 - [ ] Handoff message presented to user with next-step command.
+
+---
+
+*Last updated: 2026-04-13*

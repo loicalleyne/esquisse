@@ -41,9 +41,11 @@ Read the following before starting:
   format to use.
 - `AGENTS.md` — project invariants. Any violation is a Critical issue.
 
-Also read `.adversarial/state.json` if present. Note the `iteration` value
-(use 0 if absent) and the `last_model` field (to avoid repeating the same
-critique as the previous reviewer).
+The plan slug and state file path have been provided in the dispatch instruction
+(e.g. `.adversarial/P8-002-pipeline.json`). Read that file if it exists.
+Note the `iteration` value (use 0 if absent) and the `last_model` field
+(to avoid repeating the same critique as the previous reviewer).
+See SCHEMAS.md §8 for slug derivation rules.
 
 ### Step 2: Apply the 7 attacks
 
@@ -83,13 +85,15 @@ Verdict: PASSED
 ### Step 4: Update state file
 
 Create `.adversarial/` if it does not exist.
-Write or overwrite `.adversarial/state.json` using the schema in **SCHEMAS.md §8** (canonical source of truth).
-Required fields — names are exact, do not rename:
+Write or overwrite the plan-specific state file (path provided in dispatch instruction,
+e.g. `.adversarial/P8-002-pipeline.json`) using the schema in **SCHEMAS.md §8**
+(canonical source of truth). Required fields — names are exact, do not rename:
 ```json
 {
-  "iteration": {N+1},
-  "last_model": "GPT-4o (copilot)",
-  "last_verdict": "PASSED|CONDITIONAL|FAILED",
+  "plan_slug":        "{slug}",
+  "iteration":        {N+1},
+  "last_model":       "GPT-4o (copilot)",
+  "last_verdict":     "PASSED|CONDITIONAL|FAILED",
   "last_review_date": "YYYY-MM-DD"
 }
 ```

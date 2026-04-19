@@ -1,0 +1,331 @@
+// Package main — tests for models.go.
+package main
+
+import (
+	"context"
+	"fmt"
+	"math/rand"
+	"strings"
+	"testing"
+)
+
+// --- effectiveRounds ---
+
+func TestEffectiveRounds(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   int
+		want int
+	}{
+		{0, defaultRounds},
+		{-1, defaultRounds},
+		{1, 1},
+		{3, 3},
+		{50, 50},
+		{51, maxRounds},
+	}
+	for _, tc := range cases {
+		got := effectiveRounds(tc.in)
+		if got != tc.want {
+			t.Errorf("effectiveRounds(%d) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
+// --- buildModelPool ---
+
+func TestBuildModelPool_Defaults(t *testing.T) {
+	// Ensure no slot env vars are set.
+	for i := 0; i < 5; i++ {
+		t.Setenv(fmt.Sprintf("ESQUISSE_MODEL_SLOT%d", i), "")
+	}
+	t.Setenv("ESQUISSE_ALLOWED_PROVIDERS", "")
+	t.Setenv("ESQUISSE_POOL_FALLBACK_STRICT", "")
+
+	pool := buildModelPool()
+	if len(pool) != 5 {
+		t.Fatalf("expected 5 models, got %d: %v", len(pool), pool)
+	}
+	for i, m := range pool {
+		if m != defaultModels[i] {
+			t.Errorf("slot %d: got %q, want %q", i, m, defaultModels[i])
+		}
+	}
+}
+
+func TestBuildModelPool_AllowedProviders_Copilot(t *testing.T) {
+	for i := 0; i < 5; i++ {
+		t.Setenv(fmt.Sprintf("ESQUISSE_MODEL_SLOT%d", i), "")
+	}
+	t.Setenv("ESQUISSE_ALLOWED_PROVIDERS", "copilot")
+	t.Setenv("ESQUISSE_POOL_FALLBACK_STRICT", "")
+
+	pool := buildModelPool()
+	// defaultModels has 3 copilot entries: slots 0, 2, 4.
+	if len(pool) != 3 {
+		t.Fatalf("expected 3 copilot models, got %d: %v", len(pool), pool)
+	}
+	for _, m := range pool {
+		if !strings.HasPrefix(m, "copilot/") {
+			t.Errorf("unexpected non-copilot model %q in filtered pool", m)
+		}
+	}
+}
+
+func TestBuildModelPool_AllowedProviders_UnknownFallback(t *testing.T) {
+	for i := 0; i < 5; i++ {
+		t.Setenv(fmt.Sprintf("ESQUISSE_MODEL_SLOT%d", i), "")
+	}
+	t.Setenv("ESQUISSE_ALLOWED_PROVIDERS", "openai")
+	t.Setenv("ESQUISSE_POOL_FALLBACK_STRICT", "")
+
+	pool := buildModelPool()
+	// No defaultModels entry has "openai" prefix → fall back to all 5 defaults.
+	if len(pool) != 5 {
+		t.Fatalf("expected fallback to 5 default models, got %d: %v", len(pool), pool)
+	}
+}
+
+func TestBuildModelPool_InvalidSlotFormat(t *testing.T) {
+	t.Setenv("ESQUISSE_MODEL_SLOT0", "badformat")
+	for i := 1; i < 5; i++ {
+		t.Setenv(fmt.Sprintf("ESQUISSE_MODEL_SLOT%d", i), "")
+	}
+	t.Setenv("ESQUISSE_ALLOWED_PROVIDERS", "")
+	t.Setenv("ESQUISSE_POOL_FALLBACK_STRICT", "")
+
+	pool := buildModelPool()
+	// Slot 0 falls back to default.
+	if pool[0] != defaultModels[0] {
+		t.Errorf("slot 0 with invalid format: got %q, want %q", pool[0], defaultModels[0])
+	}
+}
+
+func TestBuildModelPool_StrictWithAllFiltered(t *testing.T) {
+	for i := 0; i < 5; i++ {
+		t.Setenv(fmt.Sprintf("ESQUISSE_MODEL_SLOT%d", i), "")
+	}
+	t.Setenv("ESQUISSE_ALLOWED_PROVIDERS", "openai")
+	t.Setenv("ESQUISSE_POOL_FALLBACK_STRICT", "1")
+
+	pool := buildModelPool()
+	if pool != nil {
+		t.Fatalf("expected nil pool in strict mode with all filtered, got %v", pool)
+	}
+}
+
+// --- familyInterleaveShuffle ---
+
+func TestFamilyInterleaveShuffle_NoCopilotConsecutiveMore2(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewSource(42))
+	result := familyInterleaveShuffle(defaultModels, rng)
+	if len(result) != len(defaultModels) {
+		t.Fatalf("len mismatch: got %d, want %d", len(result), len(defaultModels))
+	}
+	// Count consecutive copilot pairs.
+	consecutiveCopilot := 0
+	for i := 1; i < len(result); i++ {
+		if strings.HasPrefix(result[i], "copilot/") && strings.HasPrefix(result[i-1], "copilot/") {
+			consecutiveCopilot++
+		}
+	}
+	if consecutiveCopilot > 1 {
+		t.Errorf("too many consecutive copilot models (%d pairs): %v", consecutiveCopilot, result)
+	}
+}
+
+func TestFamilyInterleaveShuffle_LenPreserved(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewSource(99))
+	result := familyInterleaveShuffle(defaultModels, rng)
+	if len(result) != len(defaultModels) {
+		t.Errorf("got len=%d, want %d", len(result), len(defaultModels))
+	}
+}
+
+// --- buildRotationOrder ---
+
+func TestBuildRotationOrder_LenMatchesRounds(t *testing.T) {
+	t.Parallel()
+	for _, rounds := range []int{1, 3, 5, 7, 10, 15} {
+		got := buildRotationOrder(defaultModels, rounds)
+		if len(got) != rounds {
+			t.Errorf("rounds=%d: got len=%d", rounds, len(got))
+		}
+	}
+}
+
+func TestBuildRotationOrder_NoConsecutiveIdentical(t *testing.T) {
+	SetRandSource(rand.NewSource(123))
+	defer SetRandSource(nil)
+	got := buildRotationOrder(defaultModels, 20)
+	for i := 1; i < len(got); i++ {
+		if got[i] == got[i-1] {
+			t.Errorf("consecutive identical at index %d: %q", i, got[i])
+		}
+	}
+}
+
+func TestBuildRotationOrder_TwoSeedsDiffer(t *testing.T) {
+	SetRandSource(rand.NewSource(1))
+	order1 := buildRotationOrder(defaultModels, 10)
+	SetRandSource(rand.NewSource(9999))
+	order2 := buildRotationOrder(defaultModels, 10)
+	SetRandSource(nil)
+
+	same := true
+	for i := range order1 {
+		if order1[i] != order2[i] {
+			same = false
+			break
+		}
+	}
+	if same {
+		t.Error("two different seeds produced identical rotation order")
+	}
+}
+
+// --- worstVerdict ---
+
+func TestWorstVerdict(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		verdicts []string
+		want     string
+	}{
+		{[]string{"PASSED", "CONDITIONAL"}, "CONDITIONAL"},
+		{[]string{"PASSED", "CONDITIONAL", "PASSED"}, "CONDITIONAL"},
+		{[]string{"PASSED", "FAILED", "CONDITIONAL"}, "FAILED"},
+		{[]string{}, ""},
+		{[]string{"PASSED"}, "PASSED"},
+		{[]string{"CONDITIONAL"}, "CONDITIONAL"},
+		{[]string{"FAILED"}, "FAILED"},
+		{[]string{"", ""}, ""},
+	}
+	for _, tc := range cases {
+		got := worstVerdict(tc.verdicts)
+		if got != tc.want {
+			t.Errorf("worstVerdict(%v) = %q, want %q", tc.verdicts, got, tc.want)
+		}
+	}
+}
+
+// --- isModelUnavailable ---
+
+func TestIsModelUnavailable(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		output string
+		want   bool
+	}{
+		{"Error: model is not supported for this organization", true},
+		{"Error: Model Not Supported", true},
+		{"not available for your organization", true},
+		{"not enabled for your organization", true},
+		{"access to this model is restricted", true},
+		{"model access denied by policy", true},
+		{"this model is not available", true},
+		{"auth error: invalid token", false},
+		{"network error: connection refused", false},
+		{"rate limit exceeded", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		got := isModelUnavailable(tc.output)
+		if got != tc.want {
+			t.Errorf("isModelUnavailable(%q) = %v, want %v", tc.output, got, tc.want)
+		}
+	}
+}
+
+// --- runOneRound ---
+
+func TestRunOneRound_SuccessPath(t *testing.T) {
+	orig := runCrushFn
+	defer func() { runCrushFn = orig }()
+
+	runCrushFn = func(_ context.Context, model, _ string) (RunResult, error) {
+		return RunResult{Output: "Verdict: PASSED\n", ExitCode: 0}, nil
+	}
+
+	tmpDir := t.TempDir()
+	usedModel, output, err := runOneRound(
+		context.Background(),
+		defaultModels,
+		defaultModels[0],
+		"preamble",
+		"plan content",
+		tmpDir,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if usedModel != defaultModels[0] {
+		t.Errorf("usedModel = %q, want %q", usedModel, defaultModels[0])
+	}
+	if !strings.Contains(output, "PASSED") {
+		t.Errorf("output missing PASSED: %q", output)
+	}
+}
+
+func TestRunOneRound_FallbackPath(t *testing.T) {
+	orig := runCrushFn
+	defer func() { runCrushFn = orig }()
+
+	calls := 0
+	primary := defaultModels[0]
+	fallback := defaultModels[1]
+
+	runCrushFn = func(_ context.Context, model, _ string) (RunResult, error) {
+		calls++
+		if model == primary {
+			return RunResult{Output: "model is not supported", ExitCode: 1}, nil
+		}
+		return RunResult{Output: "Verdict: CONDITIONAL\n", ExitCode: 0}, nil
+	}
+
+	tmpDir := t.TempDir()
+	usedModel, output, err := runOneRound(
+		context.Background(),
+		defaultModels,
+		primary,
+		"preamble",
+		"plan content",
+		tmpDir,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if usedModel != fallback {
+		t.Errorf("usedModel = %q, want fallback %q", usedModel, fallback)
+	}
+	if !strings.Contains(output, "CONDITIONAL") {
+		t.Errorf("output missing CONDITIONAL: %q", output)
+	}
+}
+
+func TestRunOneRound_AllUnavailable(t *testing.T) {
+	orig := runCrushFn
+	defer func() { runCrushFn = orig }()
+
+	runCrushFn = func(_ context.Context, _ string, _ string) (RunResult, error) {
+		return RunResult{Output: "model is not supported", ExitCode: 1}, nil
+	}
+
+	tmpDir := t.TempDir()
+	_, _, err := runOneRound(
+		context.Background(),
+		defaultModels,
+		defaultModels[0],
+		"preamble",
+		"plan content",
+		tmpDir,
+	)
+	if err == nil {
+		t.Fatal("expected errAllModelsUnavailable, got nil")
+	}
+	if err != errAllModelsUnavailable {
+		t.Errorf("got error %v, want errAllModelsUnavailable", err)
+	}
+}

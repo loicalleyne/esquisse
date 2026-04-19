@@ -120,7 +120,11 @@ fi
 # ── Check 2: Lint ─────────────────────────────────────────────────────────────
 section "Check 2: Lint"
 if [[ "$LANG_ADAPTER" == "go" ]]; then
-    if command -v golangci-lint &>/dev/null; then
+    # Skip lint if there are no Go files (pure-markdown or docs-only project).
+    GO_PKG_COUNT=$(go list ./... 2>/dev/null | wc -l || echo 0)
+    if [[ "$GO_PKG_COUNT" -eq 0 ]]; then
+        pass "No Go packages found — skipping lint (pure-markdown project)."
+    elif command -v golangci-lint &>/dev/null; then
         # Auto-discovers .golangci.yml at the project root; no --config needed.
         if golangci-lint run ./... 2>&1; then
             pass "golangci-lint passed."
@@ -142,7 +146,17 @@ fi
 
 # ── Check 3: Tests ────────────────────────────────────────────────────────────
 section "Check 3: Tests"
-if eval "$TEST_CMD" 2>&1; then
+if [[ "$LANG_ADAPTER" == "go" ]]; then
+    # Skip tests if there are no Go files (pure-markdown or docs-only project).
+    GO_PKG_COUNT=$(go list ./... 2>/dev/null | wc -l || echo 0)
+    if [[ "$GO_PKG_COUNT" -eq 0 ]]; then
+        pass "No Go packages found — skipping tests (pure-markdown project)."
+    elif eval "$TEST_CMD" 2>&1; then
+        pass "All tests pass."
+    else
+        fail "Tests failed. All tests must pass before promoting to the next phase."
+    fi
+elif eval "$TEST_CMD" 2>&1; then
     pass "All tests pass."
 else
     fail "Tests failed. All tests must pass before promoting to the next phase."
@@ -243,16 +257,18 @@ else
         warn "$TASK_DIR not found — skipping task status check."
     else
         while IFS= read -r -d '' f; do
-            if ! grep -qiE "^(\| *)?Status *(\|)? *:? *Completed" "$f" 2>/dev/null; then
+            # Accept both "Status: Done" and "Status: Completed" (SCHEMAS.md canonical
+            # value is "Done"; also handles bold markdown format **Status:** Done).
+            if ! grep -qiE "Status.*(Done|Completed)" "$f" 2>/dev/null; then
                 echo "  not completed: $f"
                 INCOMPLETE=$(( INCOMPLETE + 1 ))
             fi
         done < <(find "$TASK_DIR" -maxdepth 1 -name "P${PHASE}-*.md" -print0 2>/dev/null)
 
         if [[ $INCOMPLETE -eq 0 ]]; then
-            pass "All P${PHASE} task docs have Status: Completed."
+            pass "All P${PHASE} task docs have Status: Done."
         else
-            fail "$INCOMPLETE task doc(s) in P${PHASE} are not Completed."
+            fail "$INCOMPLETE task doc(s) in P${PHASE} are not Done."
         fi
     fi
 fi

@@ -9,23 +9,6 @@ description: >
   DO NOT invoke this skill when: the user wants to implement a specific task
   (use implement-task); the user has a bug to fix (use debug-issue);
   the user wants to write a feature spec (use write-spec).
-triggers:
-  - "explore the codebase"
-  - "orient me"
-  - "where is"
-  - "how does this work"
-  - "map the architecture"
-  - "what calls"
-  - "help me understand this project"
-  - not: "implement task — use implement-task skill instead"
-  - not: "there's a bug — use debug-issue skill instead"
-  - not: "write a spec — use write-spec skill instead"
-tools_required:
-  - read_file
-  - file_search
-  - grep_search
-  - run_in_terminal
-updated: 2026-04-13
 ---
 
 # Explore-Codebase
@@ -42,16 +25,23 @@ necessary. Prefers AST queries over raw file reads when a cache exists.
 
 - [ ] The user has a specific question or orientation goal. Ask if unclear.
 
+**Tools:** `read_file`, `file_search`, `grep_search`, `run_in_terminal`
+
 ## Workflow
 
 ### Step 1: Validate Context
 
-Check whether `code_ast.duckdb` exists at the project root.
+Run the following checks in order:
 
-- **AST cache found:** AST-first mode. Prefer SQL queries over file reads.
-- **No cache:** File-scan mode. Use `read_file`, `grep_search`, `file_search`.
+1. **Check `duckdb` CLI availability:** run `command -v duckdb` in terminal.
+   - **Not found:** File-scan mode for this session. Announce: "duckdb not available — using file-scan mode."
+   - **Found:** continue to step 2.
 
-Announce: "AST cache {found — using AST-first mode / not found — using file-scan mode}."
+2. **Check `code_ast.duckdb` at project root:**
+   - **Exists:** AST-first mode. Announce: "AST cache found — using AST-first mode."
+   - **Missing:** Ask the user: "No AST cache found. Run `bash scripts/rebuild-ast.sh` to build it now? (yes / no / skip)"
+     - **Yes:** run `bash scripts/rebuild-ast.sh` in terminal. On success, switch to AST-first mode and announce: "AST cache built — using AST-first mode."
+     - **No / skip / script missing:** File-scan mode. Announce: "No AST cache — using file-scan mode."
 
 ### Level 1 — Landscape (always run)
 
@@ -150,3 +140,7 @@ Do not ask the user to read files themselves.
 - [ ] User's original question is answered.
 - [ ] Key findings summarised: language, architecture pattern, relevant types/files.
 - [ ] If a hot-path trace was requested: data flow described with entry → transform → exit.
+
+---
+
+*Last updated: 2026-04-13*

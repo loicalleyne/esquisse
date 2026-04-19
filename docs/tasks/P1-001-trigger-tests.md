@@ -1,7 +1,11 @@
-# P1-001: Trigger Test Suite for Esquisse Skills
+# P1-001 → Renumbered to P1-000
+
+> **This file has been renumbered.** See
+> [P1-000-trigger-tests.md](P1-000-trigger-tests.md) for the canonical version.
+> This file is kept to preserve git history but should not be edited.
 
 ## Status
-Status: Done
+Status: Done (renumbered to P1-000)
 Depends on: none
 Blocks: none
 

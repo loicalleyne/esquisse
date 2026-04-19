@@ -1,0 +1,54 @@
+# Esquisse — LLM Quick Index
+
+> A pure-markdown AI-agent-ready project framework. No build system. No binary.
+
+## Scripts (public CLI)
+
+| Command | Purpose |
+|---------|---------|
+| `bash scripts/init.sh --project-name NAME --target-dir DIR` | Bootstrap a new project with Esquisse document structure; installs skills to `~/.copilot/skills/` and `~/.config/crush/skills/` |
+| `bash scripts/new-task.sh PHASE SLUG` | Scaffold the next task document `docs/tasks/P{phase}-{nnn}-{slug}.md` with auto-sequenced number |
+| `bash scripts/gate-check.sh PHASE [--strict] [--lang-adapter go\|python\|ts] [--threshold N]` | Validate phase gate: build, lint, tests, coverage ≥N%, stub count, task status |
+| `bash scripts/gate-review.sh [--strict]` | Adversarial review stop-hook enforcement: block session if any `.adversarial/*.json` has no PASSED/CONDITIONAL verdict |
+| `bash scripts/upgrade.sh` | Idempotent upgrade of an adopted project to the latest Esquisse conventions |
+| `bash scripts/rebuild-ast.sh` | Rebuild DuckDB AST cache (`code_ast.duckdb`) using sitting_duck |
+
+## Skills (VS Code Copilot Chat auto-triggers)
+
+| Skill | Trigger phrases |
+|-------|----------------|
+| `adopt-project` | "add esquisse to this project", "adopt esquisse", "add framework documents to this repo" |
+| `adversarial-review` | "adversarial review", "review this plan adversarially", "run adversarial review" |
+| `explore-codebase` | "explore the codebase", "orient me", "where is X", "map the architecture" |
+| `implement-task` | "implement task P{n}-{nnn}", "start working on {slug}", "execute this task" |
+| `init-project` | "initialize a new project", "bootstrap a project", "fill in the stubs" |
+| `new-task` | "create a new task", "add a task", "define task", "new task for phase N" |
+| `write-spec` | "write a spec for X", "spec out X", "help me design X" |
+
+## Agents (VS Code Copilot Chat `.agent.md`)
+
+| Agent | Role |
+|-------|------|
+| `EsquissePlan` | Planning agent: decomposes specs into task docs, runs adversarial review |
+| `Adversarial-r0` | Adversarial reviewer, slot 0 — GPT-4.1 (cross-provider) |
+| `Adversarial-r1` | Adversarial reviewer, slot 1 — Claude Opus (higher capability) |
+| `Adversarial-r2` | Adversarial reviewer, slot 2 — GPT-4o (cross-provider) |
+
+## Document Types
+
+| Type | Path pattern | Key fields |
+|------|-------------|-----------|
+| Task | `docs/tasks/P{n}-{nnn}-{slug}.md` | Status, Goal, In Scope, Out of Scope, Files, Acceptance Criteria, Session Notes |
+| Spec | `docs/specs/{date}-{feature}.md` | Problem, Proposed Solution, Out of Scope, Architecture |
+| ADR | `docs/adr/ADR-{nnnn}-{slug}.md` | Status, Context, Decision, Consequences |
+| Review state | `.adversarial/{plan-slug}.json` | plan_slug, iteration, last_model, last_verdict, last_review_date |
+
+## Phase Numbers
+
+| Phase | Purpose |
+|-------|---------|
+| P0 | Foundation: module, CI, core types, AGENTS.md |
+| P1 | Core functionality: primary happy path, basic tests |
+| P2 | Complete feature set: all handlers, full test coverage |
+| P3 | Production hardening: edge cases, benchmarks |
+| P4+ | Ecosystem: plugins, integrations |

@@ -1,0 +1,373 @@
+# Esquisse — Full LLM Reference
+
+> A pure-markdown AI-agent-ready project framework. Clone once; `init.sh`
+> bootstraps any new or existing project with Esquisse's document conventions.
+
+---
+
+## 1. Scripts
+
+### `scripts/init.sh`
+
+Bootstraps a new project. Also runs inside an existing project to install
+skills and agents globally.
+
+```sh
+bash scripts/init.sh --project-name NAME --target-dir DIR [--yes]
+```
+
+**Creates in target dir:**
+- `AGENTS.md` (stub), `ONBOARDING.md` (stub), `GLOSSARY.md` (stub)
+- `docs/planning/ROADMAP.md` (stub), `docs/planning/NEXT_STEPS.md`
+- `docs/tasks/`, `docs/specs/`, `docs/adr/`, `scripts/`, `.adversarial/`
+- Copies `gate-check.sh`, `gate-review.sh`, `new-task.sh` into `scripts/`
+- After P1-002: generates `CRUSH.md` context file
+
+**Installs skills globally (idempotent):**
+- VS Code Copilot Chat: `~/.copilot/skills/{skill}/` (verbatim copy)
+- Crush: `~/.config/crush/skills/{skill}/` (with tool-name translation via `sed`)
+
+**Tool-name translation table** (applied to Crush copies only):
+
+| VS Code term | Crush term |
+|---|---|
+| `multi_replace_string_in_file` | `multiedit` |
+| `replace_string_in_file` | `edit` |
+| `runSubagent` | `agent` |
+| `run_in_terminal` | `bash` |
+| `create_file` | `write` |
+| `manage_todo_list` | `todos` |
+| `read_file` | `view` |
+| `grep_search` | `grep` |
+| `list_dir` | `ls` |
+| `file_search` | `glob` |
+
+**WSL path resolution:** On Windows/WSL, resolves `~/.copilot/` to the Windows
+`%USERPROFILE%/.copilot/` path. Crush always uses the Linux-native `$HOME` path.
+
+---
+
+### `scripts/new-task.sh`
+
+Scaffolds the next task document in a phase with auto-sequenced number.
+
+```sh
+bash scripts/new-task.sh PHASE SLUG
+# Example: bash scripts/new-task.sh 1 my-feature → docs/tasks/P1-003-my-feature.md
+```
+
+Reads existing `P{PHASE}-*.md` files, computes the next sequence number, and
+writes a task stub with all required schema sections.
+
+---
+
+### `scripts/gate-check.sh`
+
+Validates all phase gate criteria. Exits non-zero on any hard failure.
+
+```sh
+bash scripts/gate-check.sh PHASE [--strict] [--lang-adapter go|python|ts] [--threshold N]
+```
+
+**Checks performed (in order):**
+1. Build (`go build ./...` or equivalent)
+2. Lint (`golangci-lint` or `go vet` fallback)
+3. Tests (`go test -count=1 ./...` or equivalent)
+4. Stub detection (`panic("TODO` in Go; `raise NotImplementedError` in Python)
+5. ASSUMPTION/TODO annotation counts (`--strict` treats any as hard failure)
+6. Test coverage ≥ threshold (default 80%)
+7. Task status: all `P{PHASE}-*.md` must have `Status: Done`
+
+**Language adapters:** `go` (default), `python`, `ts`
+
+---
+
+### `scripts/gate-review.sh`
+
+Adversarial review enforcement hook. Called by VS Code Stop hook and agent
+frontmatter.
+
+```sh
+bash scripts/gate-review.sh [--strict]
+```
+
+- Globs `.adversarial/*.json` (excludes `reports/` subdirectory)
+- Reads `last_verdict` field from each state file (schema: SCHEMAS.md §8)
+- Blocks (exits non-zero) if any plan has `last_verdict` = `FAILED` or absent
+- `--strict`: also blocks on `CONDITIONAL`
+- Rotation state: computes next reviewer slot as `iteration % 3`
+  - Slot 0 → `Adversarial-r0` (GPT-4.1)
+  - Slot 1 → `Adversarial-r1` (Claude Opus)
+  - Slot 2 → `Adversarial-r2` (GPT-4o)
+
+**Must run under Linux/WSL bash.** Windows `cmd.exe` is not supported.
+
+---
+
+### `scripts/upgrade.sh`
+
+Idempotent upgrade for projects that adopted Esquisse before a given version.
+Updates scripts in the target project's `scripts/` directory from the Esquisse
+source. Does not overwrite `AGENTS.md`, `GLOSSARY.md`, `ONBOARDING.md`, or
+any `docs/` content.
+
+---
+
+### `scripts/rebuild-ast.sh`
+
+Rebuilds `code_ast.duckdb` using the `sitting_duck` DuckDB extension. Run
+after adding or removing source files. The cache file is gitignored.
+
+---
+
+### `scripts/macros.sql` / `scripts/macros_go.sql`
+
+DuckDB SQL macros for AST-based codebase navigation. Load into a DuckDB
+session with:
+
+```sql
+.read scripts/macros.sql
+.read scripts/macros_go.sql
+```
+
+`macros.sql` — universal: file tree, symbol counts, call graphs
+`macros_go.sql` — Go-specific: struct fields, interface implementations, type flow
+
+---
+
+## 2. Skills
+
+All skills live in `skills/{name}/SKILL.md`. They are loaded by VS Code Copilot
+Chat and Crush via `~/.copilot/skills/` and `~/.config/crush/skills/` respectively
+after `scripts/init.sh` runs.
+
+### `adopt-project`
+
+**Trigger:** "add esquisse to this project", "adopt esquisse", "add framework
+documents to this repo", "set up AGENTS.md for this project"
+
+Adds Esquisse framework documents (AGENTS.md, ONBOARDING.md, GLOSSARY.md,
+ROADMAP.md, NEXT_STEPS.md) to an existing project that already has source code.
+Does NOT create task documents or run `init.sh`.
+
+**Not for:** creating a brand-new project (use `init-project`); creating tasks
+(use `new-task`); writing implementation code.
+
+---
+
+### `adversarial-review`
+
+**Trigger:** "adversarial review", "review this plan adversarially", "run
+adversarial review", "hostile review of the plan"
+
+Multi-model plan review using the 7-attack protocol. Reads rotation state from
+`.adversarial/{plan-slug}.json` to select the appropriate reviewer agent.
+
+**Attack vectors:** False Assumptions, Edge Case Injection, Security Adversary,
+Logic Contradiction Finder, Context Blindness Check, Failure Mode Analysis,
+Hallucination Check.
+
+**Rotation:** `slot = iteration % 3`
+- 0 → `runSubagent("Adversarial-r0", prompt)` — GPT-4.1
+- 1 → `runSubagent("Adversarial-r1", prompt)` — Claude Opus
+- 2 → `runSubagent("Adversarial-r2", prompt)` — GPT-4o
+
+**Crush mode (after P1-003):** Uses `crush run --model {provider/model} --quiet`
+with plan content passed via stdin redirect from a temp file. See
+`skills/adversarial-review/crush-models.md`.
+
+**State file written by reviewer:** `.adversarial/{plan-slug}.json`
+Fields: `plan_slug`, `iteration`, `last_model`, `last_verdict`, `last_review_date`
+
+**Not for:** code review after implementation (use `requesting-code-review`).
+
+---
+
+### `explore-codebase`
+
+**Trigger:** "explore the codebase", "orient me", "where is X", "how does Y
+work", "map the architecture", "what calls Y"
+
+First-contact codebase orientation. Uses `duckdb-code` skill (if AST cache
+exists) or `grep_search`/`read_file`. Answers structural questions before
+implementation begins.
+
+**Not for:** implementing a specific task; fixing a bug; writing a feature spec.
+
+---
+
+### `implement-task`
+
+**Trigger:** "implement task P{n}-{nnn}", "start working on {slug}", "execute
+this task", "let's implement", "do the work for task X"
+
+Central implementation workflow for Esquisse task documents. Encodes the full
+Per-Task Startup Protocol (11 steps) and Per-Task Completion Protocol (10 steps)
+from FRAMEWORK.md §9.
+
+**Gate:** checks adversarial review verdict before dispatching ImplementerAgent.
+
+**Not for:** exploring the codebase first; fixing bugs; writing specs.
+
+---
+
+### `init-project`
+
+**Trigger:** "initialize a new project", "bootstrap a project", "set up a new
+repo", "fill in the stubs", "fill in the TODO placeholders"
+
+Bootstraps a brand-new project using `scripts/init.sh`. Fills in all stub
+placeholders in the generated documents.
+
+**Not for:** adding Esquisse to an existing project (use `adopt-project`);
+creating a single task (use `new-task`).
+
+---
+
+### `new-task`
+
+**Trigger:** "create a new task", "add a task", "define task", "new task for
+phase N", "I need to implement {feature}", "what's next?"
+
+Creates a new task document using `scripts/new-task.sh`. Prompts for Goal,
+In Scope, Out of Scope, and Acceptance Criteria before writing.
+
+**Not for:** initializing a brand-new project (use `init-project`); immediate
+implementation without a task document first.
+
+---
+
+### `write-spec`
+
+**Trigger:** "write a spec for X", "spec out X", "help me design X", "before
+we implement X let's define it", "what approach should we take for X"
+
+Conversational feature specification. Saves output to
+`docs/specs/{date}-{feature}.md`. Does NOT create task documents in the same
+step.
+
+**Not for:** implementing a task; planning task decomposition; reviewing code.
+
+---
+
+## 3. Agents (VS Code `.agent.md`)
+
+All agents live in `.github/agents/`. Installed to `~/.copilot/agents/` via
+`scripts/init.sh`.
+
+### `EsquissePlan`
+
+Planning agent. Invoked via `@EsquissePlan` in VS Code Chat or by selecting
+the EsquissePlan mode.
+
+**Protocol:**
+1. Read AGENTS.md, GLOSSARY.md, ROADMAP.md, spec document
+2. Map the work (files, types, functions, dependencies)
+3. Write task documents (`scripts/new-task.sh`)
+4. Dispatch adversarial review (rotation slot from `.adversarial/state.json`)
+5. Respond to verdict (PASSED → hand off; CONDITIONAL → revise; FAILED → revise)
+
+**Never:** writes code; marks tasks Done; modifies files outside `docs/`.
+
+---
+
+### `Adversarial-r0`
+
+Rotation slot 0. Model: GPT-4.1 (OpenAI — cross-provider).
+Applies 7-attack protocol. Writes verdict to `.adversarial/{slug}.json`.
+DO NOT invoke directly — dispatched by `adversarial-review` skill or EsquissePlan.
+
+### `Adversarial-r1`
+
+Rotation slot 1. Model: Claude Opus (Anthropic — higher capability).
+Same protocol as r0.
+
+### `Adversarial-r2`
+
+Rotation slot 2. Model: GPT-4o (OpenAI — cross-provider, different from r0).
+Same protocol as r0.
+
+---
+
+## 4. Document Schemas
+
+Full schemas in `SCHEMAS.md`. Summary:
+
+### Task Document (`docs/tasks/P{n}-{nnn}-{slug}.md`)
+
+Required fields:
+- `**Phase:**`, `**Status:**` (Ready | In Progress | Done | Blocked), `**Created:**`
+- `## Goal` — one sentence, observable outcome
+- `## In Scope` — exact file/function/type names
+- `## Out of Scope` — ≥2 explicit exclusions
+- `## Files` — table: path, action (Create/Modify/Delete), what changes
+- `## Acceptance Criteria` — exact test names or observable behaviours
+- `## Session Notes` — assumptions made during planning
+
+### Adversarial Review State File (`.adversarial/{plan-slug}.json`)
+
+```json
+{
+  "plan_slug": "YYYY-MM-DD-feature-name",
+  "iteration": 3,
+  "last_model": "gpt-4.1",
+  "last_verdict": "PASSED",
+  "last_review_date": "YYYY-MM-DD"
+}
+```
+
+Field names are exact — `gate-review.sh` reads `last_verdict` and `iteration`
+by exact key name. Do not rename fields.
+
+### SKILL.md Frontmatter
+
+```yaml
+---
+name: skill-name
+description: >
+  One or two sentences matching user phrases that invoke this skill.
+  Specificity prevents false positives.
+---
+```
+
+### `.agent.md` Frontmatter
+
+```yaml
+---
+name: AgentName
+description: >
+  Purpose. Include "DO NOT invoke directly" if dispatched only by a skill.
+model: ['preferred-model (copilot)', 'Auto (copilot)']
+tools:
+  - read
+  - search
+  - write          # omit for read-only agents
+---
+```
+
+---
+
+## 5. Phase Gate Protocol
+
+Run `bash scripts/gate-check.sh N` to validate. A phase is DONE when:
+
+- All `P{N}-*.md` task docs have `Status: Done`
+- Build passes
+- Lint produces 0 errors
+- Tests pass with 0 failures
+- Test coverage ≥ threshold (default 80%)
+- No unresolved stubs (`panic("TODO`...)
+- AGENTS.md updated with new gotchas from phase N
+- ROADMAP.md updated: P{N} marked complete, P{N+1} tasks reviewed
+
+---
+
+## 6. Security Boundaries
+
+- `plan_slug` in state file paths must not traverse directories.
+  Validate: alphanumeric + `-` + `.` only.
+- Plan content in adversarial review must be passed via stdin, never in
+  shell command line arguments (prevents injection from `$(...)`, backticks).
+- `scripts/init.sh` writes only to `~/.copilot/`, `~/.config/crush/`, and
+  the explicit `--target-dir`. Never writes outside these paths.
+- Hook scripts must not forward environment variables containing credentials.

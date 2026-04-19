@@ -140,6 +140,66 @@ TODO: Populate after first agent session.
 - llms.txt (if present)
 "
 
+create_file "CRUSH.md" "# Crush Session Context — ${PROJECT_NAME}
+
+## Priority Order
+
+1. **\`AGENTS.md\`** (highest — project law)
+2. **Skills in \`~/.config/crush/skills/\`** (workflow guides)
+3. **Default Crush behavior** (lowest)
+
+## Project Context
+
+Before any response, read \`AGENTS.md\`. If \`ONBOARDING.md\` exists, read it.
+If \`GLOSSARY.md\` exists, use its vocabulary.
+
+## Tool Name Reference
+
+| What to do | Crush tool |
+|---|---|
+| Run a shell command | \`bash\` |
+| Dispatch a sub-agent (read-only) | \`agent\` |
+| Read a file | \`view\` |
+| Edit an existing file | \`edit\` / \`multiedit\` |
+| Create a new file | \`write\` |
+| Find files by name/pattern | \`glob\` |
+| Search file contents | \`grep\` |
+| List directory | \`ls\` |
+| Track tasks | \`todos\` |
+
+## Multi-model Adversarial Review
+
+Crush cannot dispatch named agents with different models. Use the
+\`esquisse\` MCP server (\`adversarial_review\` tool) when available.
+As a fallback, read \`skills/adversarial-review/crush-models.md\` for the
+exact secure bash syntax (write to file, then stdin redirect) to run the
+reviewer in a child process:
+
+| Slot | Model string |
+|------|-------------|
+| 0 | \`openai/gpt-4.1\` |
+| 1 | \`anthropic/claude-opus-4-5-20251101\` |
+| 2 | \`openai/gpt-4o\` |
+
+## Gate Review (Planning Gate)
+
+Before declaring any planning session complete, run:
+\`\`\`bash
+bash scripts/gate-review.sh --strict
+\`\`\`
+
+This checks \`.adversarial/*.json\` for PASSED/CONDITIONAL verdicts.
+A FAILED or missing verdict blocks the session.
+
+## AST Navigation
+
+If \`code_ast.duckdb\` exists at the project root, prefer structural
+queries over reading every source file. Rebuild with:
+\`\`\`bash
+bash scripts/rebuild-ast.sh
+\`\`\`
+"
+
 create_file "ONBOARDING.md" "# ONBOARDING.md — ${PROJECT_NAME}
 
 ## Mental Model
@@ -223,6 +283,25 @@ None.
 None.
 "
 
+# ── Copy framework reference docs (idempotent) ───────────────────────────────
+echo ""
+echo "Framework docs:"
+ESQUISSE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+for doc in SCHEMAS.md TEMPLATES.md; do
+    src="${ESQUISSE_ROOT}/${doc}"
+    dst="${TARGET_DIR}/docs/${doc}"
+    if [[ -f "$src" ]]; then
+        if [[ ! -f "$dst" ]]; then
+            cp "$src" "$dst"
+            echo "  created  docs/${doc}"
+        else
+            echo "  exists   docs/${doc}  (skipped)"
+        fi
+    else
+        echo "  missing  docs/${doc}  (not found at ${src})"
+    fi
+done
+
 # ── Copy scripts alongside (idempotent) ──────────────────────────────────────
 echo ""
 echo "Scripts:"
@@ -271,21 +350,115 @@ for dir in .github/agents .github/hooks; do
     create_dir "${TARGET_DIR}/${dir}"
 done
 
-# Agent files
+# All four planning agents — user-level (one copy shared across all projects).
+# Resolve ~/.copilot/agents path: in WSL use Windows USERPROFILE, else HOME.
+if command -v cmd.exe &>/dev/null 2>&1; then
+    _win_home="$(wslpath "$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')")";
+    COPILOT_AGENTS_DIR="${_win_home}/.copilot/agents"
+else
+    COPILOT_AGENTS_DIR="${HOME}/.copilot/agents"
+fi
+mkdir -p "$COPILOT_AGENTS_DIR"
+
 for agent in EsquissePlan.agent.md Adversarial-r0.agent.md Adversarial-r1.agent.md Adversarial-r2.agent.md; do
     src="${ESQUISSE_DIR}/.github/agents/${agent}"
-    dst="${TARGET_DIR}/.github/agents/${agent}"
+    dst="${COPILOT_AGENTS_DIR}/${agent}"
     if [[ -f "$src" ]]; then
         if [[ ! -f "$dst" ]]; then
             cp "$src" "$dst"
-            echo "  created  .github/agents/${agent}"
+            echo "  created  ~/.copilot/agents/${agent}  (user-level)"
         else
-            echo "  exists   .github/agents/${agent}  (skipped)"
+            echo "  exists   ~/.copilot/agents/${agent}  (skipped)"
         fi
     else
-        echo "  missing  .github/agents/${agent}  (not found in Esquisse dir)"
+        echo "  missing  ${agent}  (not found in Esquisse dir)"
     fi
 done
+
+# VS Code Copilot Chat skills (user-level)
+if command -v cmd.exe &>/dev/null 2>&1; then
+    COPILOT_SKILLS_DIR="${_win_home}/.copilot/skills"
+else
+    COPILOT_SKILLS_DIR="$HOME/.copilot/skills"
+fi
+mkdir -p "$COPILOT_SKILLS_DIR"
+
+_vscode_skills_found=0
+for src in "${ESQUISSE_DIR}/skills"/*/; do
+    [ -d "$src" ] || { echo "  WARN: source skill not found: $src"; continue; }
+    _vscode_skills_found=1
+    skill_name="$(basename "$src")"
+    dst="${COPILOT_SKILLS_DIR}/${skill_name}"
+    if [ -e "$dst" ] && [ ! -d "$dst" ]; then
+        echo "  WARN: unexpected file at $dst — skipping"
+        continue
+    fi
+    rm -rf "${dst}.tmp"
+    if ! cp -RL "$src" "${dst}.tmp"; then
+        rm -rf "${dst}.tmp"
+        echo "ERROR: failed to stage $skill_name for VS Code" >&2
+        exit 1
+    fi
+    if [ -d "$dst" ]; then
+        rm -rf "$dst"
+        mv "${dst}.tmp" "$dst"
+        echo "  UPDATED: ${COPILOT_SKILLS_DIR}/${skill_name}"
+    else
+        mv "${dst}.tmp" "$dst"
+        echo "  CREATED: ${COPILOT_SKILLS_DIR}/${skill_name}"
+    fi
+done
+[ "$_vscode_skills_found" -eq 0 ] && echo "  INFO: no skill directories found in ${ESQUISSE_DIR}/skills/"
+
+# Crush skills (user-level, with tool-name translation)
+CRUSH_SKILLS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/crush/skills"
+mkdir -p "$CRUSH_SKILLS_DIR"
+
+_crush_skills_found=0
+for src in "${ESQUISSE_DIR}/skills"/*/; do
+    [ -d "$src" ] || { echo "  WARN: source skill not found: $src"; continue; }
+    _crush_skills_found=1
+    skill_name="$(basename "$src")"
+    dst="${CRUSH_SKILLS_DIR}/${skill_name}"
+    if [ -e "$dst" ] && [ ! -d "$dst" ]; then
+        echo "  WARN: unexpected file at $dst — skipping"
+        continue
+    fi
+    rm -rf "${dst}.tmp"
+    if ! cp -RL "$src" "${dst}.tmp"; then
+        rm -rf "${dst}.tmp"
+        echo "ERROR: failed to stage $skill_name for Crush" >&2
+        exit 1
+    fi
+    if [ -f "${dst}.tmp/SKILL.md" ]; then
+        sed -i.bak \
+            -e 's/multi_replace_string_in_file/multiedit/g' \
+            -e 's/replace_string_in_file/edit/g' \
+            -e 's/runSubagent/agent/g' \
+            -e 's/run_in_terminal/bash/g' \
+            -e 's/create_file/write/g' \
+            -e 's/manage_todo_list/todos/g' \
+            -e 's/read_file/view/g' \
+            -e 's/grep_search/grep/g' \
+            -e 's/list_dir/ls/g' \
+            -e 's/file_search/glob/g' \
+            "${dst}.tmp/SKILL.md"
+        rm -f "${dst}.tmp/SKILL.md.bak"
+    fi
+    if [ -d "$dst" ]; then
+        rm -rf "$dst"
+        mv "${dst}.tmp" "$dst"
+        echo "  UPDATED: ${CRUSH_SKILLS_DIR}/${skill_name}"
+    else
+        mv "${dst}.tmp" "$dst"
+        echo "  CREATED: ${CRUSH_SKILLS_DIR}/${skill_name}"
+    fi
+done
+[ "$_crush_skills_found" -eq 0 ] && echo "  INFO: no skill directories found in ${ESQUISSE_DIR}/skills/"
+echo ""
+echo "NOTE: To enable multi-model adversarial review in Crush, build and install"
+echo "      esquisse-mcp and add the MCP entry to your crush.json."
+echo "      See esquisse-mcp/README.md."
 
 # Hooks fallback
 src="${ESQUISSE_DIR}/.github/hooks/hooks.json"

@@ -237,17 +237,20 @@ After completing all 7 attacks:
    using the report template at
    `skills/adversarial-review/references/report-template.md`.
 
-2. Update `.adversarial/state.json` using the schema in **SCHEMAS.md §8** (canonical source of truth).
+2. Write the plan-specific state file `.adversarial/{plan-slug}.json`
+   (path and slug provided in the dispatch instruction) using the schema
+   in **SCHEMAS.md §8** (canonical source of truth).
    Required fields — names are exact, do not rename:
    ```json
    {
-     "iteration": N+1,
-     "last_model": "{model name you are running on}",
-     "last_verdict": "PASSED|CONDITIONAL|FAILED",
+     "plan_slug":        "{plan-slug}",
+     "iteration":        N+1,
+     "last_model":       "{model name you are running on}",
+     "last_verdict":     "PASSED|CONDITIONAL|FAILED",
      "last_review_date": "YYYY-MM-DD"
    }
    ```
-   If the file does not exist, create `.adversarial/` first.
+   If `.adversarial/` does not exist, create it first.
 
 3. The final non-empty line of the report file MUST be:
    ```

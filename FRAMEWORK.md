@@ -826,6 +826,24 @@ Creates: `docs/tasks/`, `docs/adr/`, `docs/planning/`, `skills/`, `AGENTS.md`, `
 
 **What it does not do:** fill in project-specific content. Use the `init-project` skill (above) in a chat session to fill in all `TODO:` placeholders after the script runs.
 
+### `scripts/upgrade.sh`
+
+Upgrades an existing Esquisse-initialized project to the current Esquisse version. Safe to re-run at any time; it overwrites only Esquisse-managed infrastructure (scripts, agents, adversarial-review skill, adversarial workflow skills, `docs/SCHEMAS.md`). Never touches user-authored files (AGENTS.md, task docs, ADRs, hooks.json).
+
+**Run this on every existing project after pulling a new Esquisse version.**
+
+```sh
+# From the project directory:
+bash /opt/esquisse/scripts/upgrade.sh
+# or if the project already has it:
+bash scripts/upgrade.sh
+```
+
+**Also performs automatic migration:**
+- Detects `.adversarial/state.json` (old single-plan schema) and migrates it to a per-plan file `.adversarial/{plan-slug}.json` (new concurrent-safe schema; see SCHEMAS.md §8).
+- Normalises the legacy `verdict` field to `last_verdict` if present.
+- Leaves a deprecated stub in `state.json` (safe to delete; the hook passes it).
+
 ### `scripts/new-task.sh <phase> <slug>`
 
 Creates the next task document in a phase. Auto-sequences by reading existing files under `docs/tasks/`.

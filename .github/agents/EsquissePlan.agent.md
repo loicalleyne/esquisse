@@ -46,8 +46,11 @@ Before writing task documents:
 - Check: does each proposed identifier actually follow AGENTS.md naming conventions?
 - Check: does each proposed package/file follow the existing project layout?
 
-If `code_ast.duckdb` exists: use the `duckdb-code` skill to map existing
-call graphs and interface implementations before planning — do not guess.
+If `code_ast.duckdb` exists at the project root: use the `duckdb-code` skill to map
+existing call graphs and interface implementations before planning — do not guess.
+If it does NOT exist but `duckdb` CLI is available: run `bash scripts/rebuild-ast.sh`
+to build the cache, then use `duckdb-code`. Fall back to `grep_search` / `read_file`
+only when DuckDB is unavailable.
 
 ### Step 3: Write task documents
 
@@ -71,7 +74,9 @@ If a task would modify more than 10 files, split it.
 
 When the plan is complete:
 
-1. Read `.adversarial/state.json`. If absent, use `iteration = 0`.
+1. Derive the plan slug from the plan document filename (see SCHEMAS.md §8).
+   State file path: `.adversarial/{plan-slug}.json`.
+   Read that file if it exists. If absent, use `iteration = 0`.
 2. Compute `slot = iteration % 3`.
 3. Dispatch the appropriate reviewer:
    - slot 0 → `@Adversarial-r0` (GPT-4.1 — cross-provider)
@@ -81,7 +86,8 @@ When the plan is complete:
    - All task documents just written
    - The original spec
    - Current date and iteration number
-5. Wait for the verdict in `.adversarial/state.json`.
+   - The plan slug and state file path: `.adversarial/{plan-slug}.json`
+5. Wait for the verdict in `.adversarial/{plan-slug}.json`.
 
 ### Step 5: Respond to verdict
 

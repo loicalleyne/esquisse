@@ -10,22 +10,6 @@ description: >
   DO NOT invoke this skill when: the user wants to explore the codebase first
   (use explore-codebase); there is a bug to fix (use debug-issue); the user
   wants to write a spec (use write-spec).
-triggers:
-  - "implement task"
-  - "start working on"
-  - "execute this task"
-  - "let's implement"
-  - "do the work for task"
-  - not: "explore the codebase — use explore-codebase skill instead"
-  - not: "there's a bug — use debug-issue skill instead"
-  - not: "write a spec — use write-spec skill instead"
-tools_required:
-  - read_file
-  - replace_string_in_file
-  - create_file
-  - run_in_terminal
-  - runSubagent
-updated: 2026-04-13
 ---
 
 # Implement-Task
@@ -43,6 +27,8 @@ handoff prompt.
 - [ ] A task document exists at `docs/tasks/P{n}-{nnn}-{slug}.md`.
 - [ ] `AGENTS.md` exists layered with invariants and conventions.
 - [ ] `GLOSSARY.md` exists (or can be bootstrapped from AGENTS.md vocabulary).
+
+**Tools:** `read_file`, `replace_string_in_file`, `create_file`, `run_in_terminal`, `runSubagent`
 
 ## Workflow
 
@@ -261,3 +247,7 @@ handoff is omitted.
 - [ ] ADR written if a non-obvious design choice was made (Step 15).
 - [ ] llms.txt + llms-full.txt updated if public API changed (Step 17).
 - [ ] Handoff prompt presented to user (Step 18).
+
+---
+
+*Last updated: 2026-04-13*

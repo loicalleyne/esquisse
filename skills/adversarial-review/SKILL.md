@@ -31,7 +31,10 @@ Check that a reviewable plan is available:
 
 ### Step 2: Determine rotation slot
 
-Read `.adversarial/state.json`. If absent, `iteration` = 0.
+Identify the plan document (from session memory or Step 1 above).
+Derive the plan slug: `basename {plan-file} .md` (see SCHEMAS.md §8).
+State file: `.adversarial/{plan-slug}.json`.
+Read that file if it exists. If absent, `iteration` = 0.
 
 ```
 slot = iteration % 3
@@ -40,7 +43,7 @@ slot = iteration % 3
 | slot | Agent |
 |---|---|
 | 0 | `@Adversarial-r0` (GPT-4.1) |
-| 1 | `@Adversarial-r1` (Claude Opus 4.6) |
+| 1 | `@Adversarial-r1` (Claude Opus 4-5) |
 | 2 | `@Adversarial-r2` (GPT-4o) |
 
 Tell the user: "Dispatching adversarial reviewer (slot {slot}, iteration
@@ -62,6 +65,45 @@ Gather the full plan to be reviewed. Prefer the most complete version:
 3. If both exist, use both — session memory for high-level design, task docs
    for implementation details.
 
+### Step 4b: Platform detection — choose dispatch method
+
+Before dispatching the reviewer, determine which platform you are running on:
+
+**VS Code Copilot Chat:**
+- `runSubagent` is listed in your tool set.
+- Proceed to Step 5 (named agent dispatch).
+
+**Crush:**
+- `runSubagent` is NOT listed in your tool set; `agent` IS listed.
+  (`agent` in Crush is read-only; it cannot write `.adversarial/` files.)
+- Load `skills/adversarial-review/crush-models.md` (or the project-local
+  copy under the skills directory).
+- Follow the bash approach defined in `crush-models.md` exactly.
+- After `bash` returns, read `.adversarial/{slug}.json` to get the verdict.
+- Skip Step 5; proceed directly to Step 6 (present verdict).
+
+**SECURITY INVARIANT:** Plan content must never appear in the shell command
+line. Always use the write-then-stdin-redirect approach. See `crush-models.md`.
+
+**Detection rule:** `runSubagent` in tool list → VS Code. `runSubagent` NOT
+in tool list → Crush → use the bash approach in `crush-models.md`.
+
+### Step 4c: MCP server shortcut (preferred when available)
+
+If the `adversarial_review` MCP tool is registered (via the `esquisse-mcp`
+server in your `crush.json`), use it instead of the manual bash approach:
+
+```
+adversarial_review(
+  plan_slug: "{slug}",
+  plan_content: "{full plan text}"
+)
+```
+
+The MCP tool handles model selection, rotation state, subprocess management,
+and verdict writing. Proceed to Step 6 after it returns.
+If the tool is not available, continue with Step 4b (bash approach).
+
 ### Step 5: Dispatch reviewer
 
 Dispatch `@Adversarial-r{slot}` with the following context:
@@ -75,17 +117,18 @@ Instruction to reviewer:
 ```
 You are Adversarial-r{slot}. Apply the 7-attack protocol from the attached
 task-review-protocol.md to the plan below. Use the report template. Write
-your report to .adversarial/reports/review-{date}-iter{iteration}.md and
-update .adversarial/state.json. Your job is to BREAK this plan, not to
-approve it. If you cannot find serious problems, you are not looking hard
-enough. The final line of your report must be:
+your report to .adversarial/reports/review-{date}-iter{iteration}-{plan-slug}.md
+and write state to .adversarial/{plan-slug}.json (plan_slug: "{plan-slug}").
+Schema: SCHEMAS.md §8. Your job is to BREAK this plan, not to approve it.
+If you cannot find serious problems, you are not looking hard enough.
+The final line of your report must be:
 Verdict: PASSED|CONDITIONAL|FAILED
 ```
 
 ### Step 6: Present verdict
 
 After the reviewer completes:
-1. Read `.adversarial/state.json` to confirm `last_verdict`.
+1. Read `.adversarial/{plan-slug}.json` to confirm `last_verdict`.
 2. Present the verdict and issue summary to the user.
 3. Based on verdict:
    - **PASSED**: "Plan approved. Proceed to implementation."

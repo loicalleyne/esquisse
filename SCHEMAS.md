@@ -390,32 +390,35 @@ Skills are reusable workflow prompts for agents. They encode standard operating 
 
 ### Frontmatter
 
+VS Code Copilot Chat parses **only two frontmatter fields**. All other fields are
+silently ignored by VS Code (though the LLM reads the full markdown including any
+extra fields).
+
 ```yaml
 ---
-name: {kebab-slug}
-description: >
-  One paragraph. When to invoke this skill. Include trigger phrases.
-  DO NOT invoke this skill when: {negative cases}.
-triggers:
-  - "{phrase 1}"
-  - "{phrase 2}"
-  - not: "{phrase that must NOT trigger this skill — name the correct skill}"
-tools_required:
-  - {tool_name}
-# tools_required validation rules:
-#   - List only tools the skill actively calls. Do not list tools "just in case."
-#   - Use the canonical tool name as it appears in the agent framework
-#     (e.g. read_file, replace_string_in_file, run_in_terminal, runSubagent).
-#   - A skill that only reads files needs: [read_file].
-#   - A skill that writes files needs: [read_file, replace_string_in_file, create_file].
-#   - A skill that runs shell commands needs: [run_in_terminal].
-#   - A skill that delegates to a sub-agent needs: [runSubagent].
-#   - If an agent framework does not provide a required tool, the skill must
-#     degrade gracefully: describe what the tool would do and ask the user to
-#     perform the step manually. Never silently skip a required step.
-updated: {YYYY-MM-DD}
+name: {kebab-slug}     # Required. Used for explicit invocation ("use the X skill").
+description: >         # Required. The ONLY auto-trigger mechanism in VS Code.
+  One paragraph. When to invoke this skill. Include representative trigger phrases
+  so VS Code can match user messages.
+  DO NOT invoke this skill when: {negative cases — list competing skills by name}.
 ---
 ```
+
+**Trigger mechanism:** VS Code matches the user's message against `description:` text.
+Negative guards ("DO NOT invoke when...") belong in `description:` — they inform the
+model's routing decision. There is no `not:` exclusion field; it is not parsed.
+
+**Fields that are NOT supported in VS Code** (do not add to frontmatter):
+
+| Field | Why not to use it |
+|-------|------------------|
+| `triggers:` (list) | Not parsed by VS Code. Routing is driven by `description:` only. |
+| `not:` (within triggers) | Not parsed. Use "DO NOT invoke when..." prose in `description:` instead. |
+| `tools_required:` | Not parsed. Document required tools in the `## Prerequisites` body section. |
+| `updated:` | Not parsed. Use a comment in the body or git history. |
+
+If you are writing skills for Crush or Claude Code (not VS Code), those frameworks may
+support additional fields — consult their own documentation.
 
 ### Body Structure
 
@@ -512,16 +515,39 @@ reading the source code. It must not be so verbose that reviewers stop reading i
 
 ---
 
-## 8. Adversarial Review State Schema (`.adversarial/state.json`)
+## 8. Adversarial Review State Schema (`.adversarial/{plan-slug}.json`)
 
 **Canonical source of truth.** `gate-review.sh`, `Adversarial-r*.agent.md`, and
 `task-review-protocol.md` all reference this schema. When they conflict, this
 section wins.
 
+### One file per plan (concurrent-safe)
+
+Each plan under review gets its own state file. Multiple plans can be reviewed
+concurrently without clobbering each other.
+
+**File path:** `.adversarial/{plan-slug}.json`
+
+**Slug derivation** (apply at dispatch time, not at review time):
+```sh
+plan-slug = basename({plan-doc-path}) stripped of .md extension, lowercased, spaces→hyphens
+```
+
+Examples:
+| Plan document | State file |
+|---|---|
+| `docs/planning/2026-04-13_skill-coverage-gaps.md` | `.adversarial/2026-04-13_skill-coverage-gaps.json` |
+| `docs/tasks/P8-002-pipeline.md` | `.adversarial/P8-002-pipeline.json` |
+| `docs/specs/2026-04-14-auth-design.md` | `.adversarial/2026-04-14-auth-design.json` |
+
+`gate-review.sh` scans all `*.json` files in `.adversarial/` (top-level only).
+A plan whose state file has been deleted is considered archived and is not checked.
+
 ### Required fields (read by `gate-review.sh`)
 
 ```json
 {
+  "plan_slug":        "<string>",     // Must match the filename without .json extension.
   "iteration":        <int>,          // Increments on every review. Start at 0 if absent.
   "last_model":       "<string>",     // Model name that produced the most recent verdict.
   "last_verdict":     "PASSED|CONDITIONAL|FAILED",
@@ -529,19 +555,20 @@ section wins.
 }
 ```
 
-These four fields are the **minimum required** for the Stop hook to function.
-Any write to `state.json` that omits or renames any of them will cause the hook
-to read `last_verdict` as empty and block with "verdict is 'absent'".
+These five fields are the **minimum required** for the Stop hook to function.
+Any write that omits or renames any of them will cause the hook to block with
+"verdict is 'absent'" for that plan.
 
 ### Recommended additional fields
 
 ```json
 {
-  "iteration":        3,
+  "plan_slug":        "P8-002-pipeline",
+  "iteration":        2,
   "last_model":       "Adversarial-r0",
   "last_verdict":     "PASSED",
-  "last_review_date": "2026-04-13",
-  "plan":             "docs/planning/{slug}.md",
+  "last_review_date": "2026-04-14",
+  "plan":             "docs/tasks/P8-002-pipeline.md",
   "history": [
     {
       "iteration":  <int>,
@@ -559,15 +586,22 @@ to read `last_verdict` as empty and block with "verdict is 'absent'".
 
 | Field | Type | Written by | Read by |
 |-------|------|-----------|---------|
+| `plan_slug` | string | Adversarial-r* agents | gate-review.sh (consistency check) |
 | `iteration` | int | Adversarial-r* agents | gate-review.sh, EsquissePlan, adversarial-review skill |
 | `last_model` | string | Adversarial-r* agents | EsquissePlan (to avoid repeat critique) |
 | `last_verdict` | enum | Adversarial-r* agents | gate-review.sh |
 | `last_review_date` | YYYY-MM-DD | Adversarial-r* agents | — |
 | `history[]` | array | Adversarial-r* agents | EsquissePlan, humans |
 
-### Who writes this file
+### Who writes these files
 
-Only `Adversarial-r*` agents write `state.json` — never EsquissePlan, never the
+Only `Adversarial-r*` agents write state files — never EsquissePlan, never the
 adversarial-review skill, never a human or the main agent directly.
 If a manual write is unavoidable (e.g., recovering from a stuck session), use
-this schema exactly.
+this schema exactly and derive the slug with the rule above.
+
+### Archiving completed plans
+
+Delete `.adversarial/{plan-slug}.json` once a plan has been fully implemented
+and merged. Do not leave FAILED state files from abandoned plans — they will
+permanently block the Stop hook. Either fix them to PASSED or delete them.
