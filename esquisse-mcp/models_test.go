@@ -329,3 +329,113 @@ func TestRunOneRound_AllUnavailable(t *testing.T) {
 		t.Errorf("got error %v, want errAllModelsUnavailable", err)
 	}
 }
+
+// --- excludeModelFilter ---
+
+func TestExcludeModelFilter(t *testing.T) {
+	t.Parallel()
+	samplePool := []string{"copilot/a", "gemini/b", "copilot/c"}
+	singleEntryPool := []string{"copilot/a"}
+
+	// AC1: empty_exclude — pool returned unchanged.
+	t.Run("empty_exclude", func(t *testing.T) {
+		t.Parallel()
+		got := excludeModelFilter(samplePool, "")
+		if len(got) != len(samplePool) {
+			t.Fatalf("expected %d items, got %d", len(samplePool), len(got))
+		}
+	})
+
+	// AC2: removes_matching — only exact match is removed.
+	t.Run("removes_matching", func(t *testing.T) {
+		t.Parallel()
+		got := excludeModelFilter(samplePool, "copilot/a")
+		if len(got) != 2 {
+			t.Fatalf("got %v, want [gemini/b copilot/c]", got)
+		}
+		for _, m := range got {
+			if m == "copilot/a" {
+				t.Errorf("copilot/a should have been excluded; got %v", got)
+			}
+		}
+	})
+
+	// AC3: case_insensitive — uppercase/mixed produce same result as lowercase.
+	t.Run("case_insensitive", func(t *testing.T) {
+		t.Parallel()
+		got1 := excludeModelFilter(samplePool, "Copilot/A")
+		got2 := excludeModelFilter(samplePool, "COPILOT/A")
+		got3 := excludeModelFilter(samplePool, "copilot/a")
+		if len(got1) != len(got3) || len(got2) != len(got3) {
+			t.Errorf("case mismatch: %v vs %v vs %v", got1, got2, got3)
+		}
+	})
+
+	// AC4: single_entry_fallback — would-empty → fail-open → original pool returned.
+	t.Run("single_entry_fallback", func(t *testing.T) {
+		t.Parallel()
+		got := excludeModelFilter(singleEntryPool, "copilot/a")
+		if len(got) != len(singleEntryPool) {
+			t.Errorf("fail-open: expected original pool len %d, got %d: %v", len(singleEntryPool), len(got), got)
+		}
+	})
+
+	// AC5: exact_match_only — "copilot/a" does not remove "copilot/ab".
+	t.Run("exact_match_only", func(t *testing.T) {
+		t.Parallel()
+		pool := []string{"copilot/a", "copilot/ab"}
+		got := excludeModelFilter(pool, "copilot/a")
+		if len(got) != 1 || got[0] != "copilot/ab" {
+			t.Errorf("got %v, want [copilot/ab]", got)
+		}
+	})
+
+	// AC6: whitespace_only — no-op.
+	t.Run("whitespace_only", func(t *testing.T) {
+		t.Parallel()
+		got := excludeModelFilter(samplePool, "   ")
+		if len(got) != len(samplePool) {
+			t.Errorf("whitespace should be no-op: got %v", got)
+		}
+	})
+
+	// AC7: no_match_noop — no entry matches → pool unchanged.
+	t.Run("no_match_noop", func(t *testing.T) {
+		t.Parallel()
+		pool2 := []string{"gemini/a", "vertexai/b"}
+		got := excludeModelFilter(pool2, "copilot/x")
+		if len(got) != len(pool2) {
+			t.Errorf("no-match should be no-op: got %v", got)
+		}
+	})
+
+	// AC8: malformed_value — invalid chars → pool unchanged.
+	t.Run("malformed_value", func(t *testing.T) {
+		t.Parallel()
+		got := excludeModelFilter(samplePool, "copilot)")
+		if len(got) != len(samplePool) {
+			t.Errorf("malformed should be no-op: got %v", got)
+		}
+	})
+
+	// AC9 (integration): single-entry pool where entry matches → fail-open → original returned.
+	t.Run("single_entry_exact_match_failopen", func(t *testing.T) {
+		t.Parallel()
+		pool := []string{"gemini/pro"}
+		got := excludeModelFilter(pool, "gemini/pro")
+		if len(got) != 1 || got[0] != "gemini/pro" {
+			t.Errorf("fail-open: expected original pool, got %v", got)
+		}
+	})
+
+	// AC13: partial_model_without_provider_noop — "a" does not match "copilot/a" exactly.
+	t.Run("partial_model_without_provider_noop", func(t *testing.T) {
+		t.Parallel()
+		pool := []string{"copilot/a", "gemini/b"}
+		got := excludeModelFilter(pool, "a")
+		if len(got) != len(pool) {
+			t.Errorf("partial match should be no-op: got %v", got)
+		}
+	})
+}
+

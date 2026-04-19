@@ -35,9 +35,10 @@ func extractVerdict(output string) string {
 
 // adversarialInput is the input schema for the adversarial_review tool.
 type adversarialInput struct {
-	PlanSlug    string `json:"plan_slug"    jsonschema:"Plan slug used as state file name"`
-	PlanContent string `json:"plan_content" jsonschema:"Full text of the plan to review"`
-	Rounds      int    `json:"rounds,omitempty" jsonschema:"Number of review rounds (default 5, max 50)"`
+	PlanSlug        string `json:"plan_slug"         jsonschema:"Plan slug used as state file name"`
+	PlanContent     string `json:"plan_content"      jsonschema:"Full text of the plan to review"`
+	Rounds          int    `json:"rounds,omitempty"  jsonschema:"Number of review rounds (default 5, max 50)"`
+	ExcludeModel string `json:"exclude_model,omitempty" jsonschema:"Full model ID to exclude from review pool (e.g. copilot/claude-sonnet-4.6). Obtain from crush_info tool. Empty or omitted = no exclusion."`
 }
 
 func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallToolRequest, adversarialInput) (*mcp.CallToolResult, any, error) {
@@ -52,6 +53,7 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 		if len(pool) == 0 {
 			return mcpErr("all model slots excluded by ESQUISSE_ALLOWED_PROVIDERS — set ESQUISSE_POOL_FALLBACK_STRICT=0 or allow at least one provider")
 		}
+		effectivePool := excludeModelFilter(pool, input.ExcludeModel)
 
 		state, err := ReadState(projectRoot, input.PlanSlug)
 		if err != nil {
@@ -59,7 +61,7 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 		}
 
 		rounds := effectiveRounds(input.Rounds)
-		rotOrder := buildRotationOrder(pool, rounds)
+		rotOrder := buildRotationOrder(effectivePool, rounds)
 
 		rctx, cancel := context.WithTimeout(ctx, 300*time.Second)
 		defer cancel()
@@ -89,7 +91,7 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 				projectRoot, date, state.Iteration+roundIdx, roundNum, input.PlanSlug,
 			)
 
-			usedModel, output, err := runOneRound(rctx, pool, rotOrder[roundIdx], preamble, input.PlanContent, tmpDir)
+			usedModel, output, err := runOneRound(rctx, effectivePool, rotOrder[roundIdx], preamble, input.PlanContent, tmpDir)
 			if err != nil {
 				return mcpErr("round %d/%d failed: %v", roundNum, rounds, err)
 			}

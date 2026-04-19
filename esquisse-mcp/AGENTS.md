@@ -106,6 +106,7 @@ go install .
 - **Error handling:** `mcpErr(format, args...)` for tool-layer errors; `fmt.Errorf` with `%w` for internal wrapping; `log.Fatal` only in `main()`.
 - **Logging:** `log.Printf` for warnings and operational events. Use `%q` when logging any value derived from env vars or user input to prevent log injection.
 - **Temp files:** Always `os.CreateTemp(tmpDir, "round-*.txt")` with mode 0600. Never construct temp file paths manually. Always delete temp files before returning from `runOneRound`.
+- **`ExcludeModel` is per-call, not per-server.** The base pool is built once in the `newAdversarialHandler` closure (`buildModelPool()`). `excludeModelFilter` is called inside the handler on every request with `input.ExcludeModel`. Never move `excludeModelFilter` to the closure-construction time.
 - **Context:** Pass `ctx` through all subprocess calls. Use `context.WithTimeout` for sub-operations (`discover_models` uses a 10s sub-context; `adversarial_review` uses a 300s top-level context).
 - **Tests:** Use `t.Setenv()` for env var tests. Restore `runCrushFn` with `defer func() { runCrushFn = orig }()`. Do NOT call `t.Parallel()` in tests that call `SetRandSource` (global state mutation).
 

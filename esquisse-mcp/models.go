@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -26,6 +27,45 @@ var defaultModels = []string{
 	"copilot/gpt-4.1",
 	"vertexai/gemini-3.1-pro-preview",
 	"copilot/gpt-4o",
+}
+
+// validModelRe matches valid exclude_model values: alphanumeric, hyphen, underscore, dot, slash.
+// Slash is explicitly allowed because valid model IDs are "provider/model".
+var validModelRe = regexp.MustCompile(`^[a-zA-Z0-9_./-]+$`)
+
+// excludeModelFilter returns a copy of pool with all entries that exactly match
+// exclude (case-insensitive) removed.
+// If exclude is empty or whitespace-only: no-op (returns pool unchanged).
+// If exclude is malformed (fails validModelRe): logs warning, returns pool unchanged.
+// If no pool entry matches: logs info, returns pool unchanged.
+// If all entries match (would empty pool): logs warning "would empty pool; ignoring exclusion",
+// returns pool unchanged (fail-open — blocking review is worse than reduced independence).
+// All non-empty exclude values are logged with %q to prevent log injection.
+func excludeModelFilter(pool []string, exclude string) []string {
+	exclude = strings.TrimSpace(exclude)
+	if exclude == "" {
+		return pool
+	}
+	log.Printf("esquisse-mcp: exclude_model=%q requested", exclude)
+	if !validModelRe.MatchString(exclude) {
+		log.Printf("esquisse-mcp: exclude_model=%q is malformed, ignoring", exclude)
+		return pool
+	}
+	excludeLower := strings.ToLower(exclude)
+	filtered := make([]string, 0, len(pool))
+	for _, m := range pool {
+		if strings.ToLower(m) != excludeLower {
+			filtered = append(filtered, m)
+		}
+	}
+	if len(filtered) == 0 {
+		log.Printf("esquisse-mcp: exclude_model=%q would empty pool; ignoring exclusion", exclude)
+		return pool
+	}
+	if len(filtered) == len(pool) {
+		log.Printf("esquisse-mcp: exclude_model=%q matched no pool entries (no-op)", exclude)
+	}
+	return filtered
 }
 
 // errAllModelsUnavailable is returned when every model in the pool is blocked.

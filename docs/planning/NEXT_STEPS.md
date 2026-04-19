@@ -57,3 +57,5 @@ None.
 | 2026-04-18 | P2-006 post-impl reviews: SpecReviewerAgent APPROVED; CodeQualityReviewerAgent found data race (t.Parallel+SetRandSource) — fixed; final APPROVED |
 | 2026-04-19 | esquisse-mcp/ Esquisse documents created: AGENTS.md, GLOSSARY.md, ONBOARDING.md; README.md updated (5-slot pool, multi-round, discover_models, migration note) |
 | 2026-04-19 | ROADMAP.md: P2-006 added as Done; NEXT_STEPS.md: phase updated to P2, session log extended |
+| 2026-04-19 | P3-001 task written: exclude_provider param for adversarial_review; 6-round adversarial review (CONDITIONAL→FAILED→PASSED→CONDITIONAL→CONDITIONAL→PASSED at iter=6); task status: Ready |
+| 2026-04-19 | P3-001 revised: exclude_provider → exclude_model (exact match, regex `^[a-zA-Z0-9_./-]+$`, fail-open); 3 adversarial rounds (iter 10→13, CONDITIONAL→FAILED→PASSED); implemented via ImplementerAgent; SpecReviewerAgent COMPLIANT; CodeQualityReviewerAgent APPROVED (2 minor style notes); task Done |

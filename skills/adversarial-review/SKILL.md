@@ -93,10 +93,36 @@ in tool list → Crush → use the bash approach in `crush-models.md`.
 If the `adversarial_review` MCP tool is registered (via the `esquisse-mcp`
 server in your `crush.json`), use it instead of the manual bash approach:
 
+#### Step 4c-i: Get caller model ID (for reviewer independence)
+
+Before calling `adversarial_review`, call the `crush_info` tool to determine
+your own model's full ID:
+
+```
+crush_info()
+```
+
+Parse the output for a line matching `large = {model} ({provider})`.
+- Extract the model name: text between `large = ` and the first ` (` → e.g. `claude-sonnet-4.6`
+- Extract the provider: text inside `()` → e.g. `copilot`
+- Concatenate as `{provider}/{model}` → e.g. `copilot/claude-sonnet-4.6`
+
+Examples:
+- `large = claude-sonnet-4.6 (copilot)` → model ID is `copilot/claude-sonnet-4.6`
+- `large = gemini-1.5-pro (gemini)` → model ID is `gemini/gemini-1.5-pro`
+
+If the line is absent, the parse fails, or no `large =` line is found, log a visible note:
+`[warn] could not extract model ID from crush_info; exclude_model omitted`
+and omit `exclude_model` (pass empty string, equivalent to no-op).
+If multiple `large =` lines appear, use the first one.
+
+Then pass it to `adversarial_review`:
+
 ```
 adversarial_review(
   plan_slug: "{slug}",
-  plan_content: "{full plan text}"
+  plan_content: "{full plan text}",
+  exclude_model: "{provider}/{model} from crush_info"
 )
 ```
 

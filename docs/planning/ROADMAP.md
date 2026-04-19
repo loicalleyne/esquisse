@@ -59,13 +59,14 @@ correctly in both VS Code Copilot Chat and Crush.
 ## Upcoming: P3 — Production Hardening
 
 **Target:** CI integration, `upgrade.sh` robustness, ADR library, CHANGELOG
-conventions.
+conventions. Caller-model exclusion for adversarial reviews.
 
 | Task | Status | Summary |
-|------|--------|---------|
-| P3-001-ci-skill-lint | ⬜ Not Started | GitHub Actions workflow that validates all SKILL.md frontmatter |
-| P3-002-upgrade-sh | ⬜ Not Started | `scripts/upgrade.sh` idempotent upgrade for adopted projects |
-| P3-003-adr-library | ⬜ Not Started | Seed `docs/adr/` with foundational ADRs for Esquisse design decisions |
+|------|--------|----------|
+| [P3-001-mcp-exclude-caller-model](../tasks/P3-001-mcp-exclude-caller-model.md) | ✅ Done | `exclude_model` param on `adversarial_review`; exact case-insensitive match; regex allows `/`; fail-open; crush_info step in adversarial-review skill |
+| P3-002-ci-skill-lint | ⬜ Not Started | GitHub Actions workflow that validates all SKILL.md frontmatter |
+| P3-003-upgrade-sh | ⬜ Not Started | `scripts/upgrade.sh` idempotent upgrade for adopted projects |
+| P3-004-adr-library | ⬜ Not Started | Seed `docs/adr/` with foundational ADRs for Esquisse design decisions |
 
 ---
 

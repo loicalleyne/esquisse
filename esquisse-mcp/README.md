@@ -77,6 +77,29 @@ The pool contains 5 slots defaulting to reasoning-capable models. Model order is
 
 `adversarial_review` accepts an optional `rounds` parameter (default: 5, max: 50). Each call runs that many consecutive review rounds, aggregates the verdicts (worst-case), and writes the state file once after all rounds complete.
 
+## Caller-Model Independence
+
+Pass `exclude_model` with your own full model ID to ensure adversarial reviewers are drawn from a different model than your implementing agent.
+
+To find your model ID, call the `crush_info` tool and parse the `large = {model} ({provider})` line:
+- Extract the model name: text between `large = ` and the first ` (` → e.g. `claude-sonnet-4.6`
+- Extract the provider: text inside `()` → e.g. `copilot`
+- Concatenate as `{provider}/{model}` → e.g. `copilot/claude-sonnet-4.6`
+
+For example:
+- `large = claude-sonnet-4.6 (copilot)` → model ID is `copilot/claude-sonnet-4.6`
+- `large = gemini-1.5-pro (gemini)` → model ID is `gemini/gemini-1.5-pro`
+
+```
+adversarial_review(
+  plan_slug: "my-plan",
+  plan_content: "...",
+  exclude_model: "copilot/claude-sonnet-4.6"
+)
+```
+
+If `exclude_model` is empty, malformed (characters other than alphanumeric, `-`, `_`, `.`, `/`), or would empty the pool entirely, it is silently ignored (no-op — fail-open to avoid blocking the review).
+
 ## Enterprise Fallback
 
 If a GitHub Copilot Enterprise policy disables a model, `esquisse-mcp` automatically tries the next model in the pool for that round rather than failing the review. If all pool models are unavailable, the tool returns `IsError=true` with an actionable error message.
