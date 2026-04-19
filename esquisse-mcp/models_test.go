@@ -488,8 +488,8 @@ func TestModelProber(t *testing.T) {
 		tmpDir := t.TempDir()
 		cachePath := filepath.Join(tmpDir, "model-cache.json")
 		cacheData := ModelCache{
-			Entries:        []ModelEntry{{ID: "copilot/cached", Provider: "copilot", Available: true}},
-			CachedAt:       time.Now().Add(-10 * time.Minute),
+			Entries: []ModelEntry{{ID: "copilot/cached", Provider: "copilot", Available: true}},
+			CachedAt: time.Now().Add(-10 * time.Minute),
 			ProbeCompleted: true,
 		}
 		b, _ := json.Marshal(cacheData)
@@ -521,8 +521,8 @@ func TestModelProber(t *testing.T) {
 		tmpDir := t.TempDir()
 		cachePath := filepath.Join(tmpDir, "model-cache.json")
 		cacheData := ModelCache{
-			Entries:        []ModelEntry{{ID: "copilot/cached", Provider: "copilot", Available: true}},
-			CachedAt:       time.Now().Add(-2 * time.Hour),
+			Entries: []ModelEntry{{ID: "copilot/cached", Provider: "copilot", Available: true}},
+			CachedAt: time.Now().Add(-2 * time.Hour),
 			ProbeCompleted: true,
 		}
 		b, _ := json.Marshal(cacheData)
@@ -718,6 +718,7 @@ func TestModelProber(t *testing.T) {
 			}
 		}
 	})
+
 }
 
 // TestModelProberFilterAllowedProviders tests that newDiscoverHandler filters
@@ -785,3 +786,4 @@ func TestModelProberConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	<-p.done
 }
+
