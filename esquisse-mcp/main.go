@@ -30,10 +30,17 @@ func main() {
 		*projectRoot = pwd
 	}
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "esquisse-mcp", Version: "0.1.0"}, nil)
-	registerTools(server, *projectRoot)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+	cachePath, _ := defaultCachePath()
+	prober := newModelProber(cachePath, defaultProbeTTL())
+	prober.startProbe(ctx)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "esquisse-mcp", Version: "0.1.0"}, nil)
+	registerTools(server, *projectRoot, prober)
+
+	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 		log.Printf("server exited: %v", err)
 	}
 }

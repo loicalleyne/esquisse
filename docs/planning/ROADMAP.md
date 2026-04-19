@@ -67,6 +67,7 @@ conventions. Caller-model exclusion for adversarial reviews.
 | P3-002-ci-skill-lint | ⬜ Not Started | GitHub Actions workflow that validates all SKILL.md frontmatter |
 | P3-003-upgrade-sh | ⬜ Not Started | `scripts/upgrade.sh` idempotent upgrade for adopted projects |
 | P3-004-adr-library | ⬜ Not Started | Seed `docs/adr/` with foundational ADRs for Esquisse design decisions |
+| [P3-005-mcp-model-availability-cache](../tasks/P3-005-mcp-model-availability-cache.md) | ✅ Done | Background availability-probe goroutine + disk cache for `discover_models`; structured JSON response with `available`, `probing`, `stale`; `force_refresh` param; `ESQUISSE_MODEL_CACHE_TTL_DAYS` |
 
 ---
 

@@ -84,6 +84,9 @@ esquisse/
 │   ├── new-task/
 │   └── write-spec/
 │
+├── esquisse-mcp/                 ← MCP server
+│   └── models.go                 ← ModelEntry, ModelCache, modelProber types
+│
 ├── .github/
 │   ├── agents/                   ← VS Code agent definitions
 │   │   ├── EsquissePlan.agent.md
@@ -304,7 +307,12 @@ Esquisse does NOT include and must NOT add:
    - Right: omit `t.Parallel()` in any test that calls `SetRandSource`.
    - Why: `SetRandSource` mutates a package-level var; concurrent test goroutines produce data races.
 
-9. **P1-000 vs P1-001 task files.** `P1-001-trigger-tests.md` was created before
+9. **Concurrency in `esquisse-mcp`.**
+   - The MCP SDK stdio server handles requests serially, but background goroutines (like `modelProber`) introduce concurrent memory access.
+   - Right: always protect shared state (like the model cache) with `sync.RWMutex`.
+   - Why: concurrent reads from handlers and writes from background probes will cause data races.
+
+10. **P1-000 vs P1-001 task files.** `P1-001-trigger-tests.md` was created before
    the naming sequence was formalised. It has been renumbered to
    `P1-000-trigger-tests.md`. The original file redirects to the canonical version.
 

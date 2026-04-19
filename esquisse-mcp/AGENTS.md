@@ -18,10 +18,13 @@
    directory) and fed to `crush run` via stdin. `validateSlug` in `state.go`
    prevents path traversal from `plan_slug` input.
 
-5. **stdio MCP server is single-threaded.** The MCP Go SDK in stdio transport
-   processes one request at a time. There is no concurrent access to state files
-   or the `runCrushFn` variable. If the server is ever ported to a concurrent
-   transport, a mutex or per-slug file lock is required.
+5. **stdio MCP server is single-threaded for tool handlers.** The MCP Go SDK in
+   stdio transport processes one handler at a time. State files and `runCrushFn`
+   have no concurrent tool-handler access. However, `modelProber` runs a
+   background goroutine (`startProbe`) that writes shared cache state; all
+   reads/writes to `modelProber.cache` and `modelProber.probing` MUST go through
+   `modelProber.mu` (`sync.RWMutex`). If the server is ever ported to a
+   concurrent transport, a per-slug file lock is also required for state files.
 
 ---
 
@@ -57,9 +60,14 @@ esquisse-mcp/
 ├── main.go                 ← Entry point: --project-root flag, server startup
 ├── tools.go                ← Tool registration (mcp.AddTool)
 ├── adversarial.go          ← adversarial_review handler, adversarialInput, newAdversarialHandler
-├── models.go               ← Model pool: buildModelPool, familyInterleaveShuffle,
+├── models.go               ← Model pool + availability cache:
+│                              buildModelPool, familyInterleaveShuffle,
 │                              buildRotationOrder, runOneRound, isModelUnavailable,
-│                              worstVerdict, effectiveRounds, newDiscoverHandler
+│                              worstVerdict, effectiveRounds, newDiscoverHandler;
+│                              ModelEntry, ModelCache, modelProber,
+│                              newModelProber, newModelProberWithFuncs,
+│                              startProbe, currentState, forceRefresh,
+│                              loadCache, saveCache, defaultCachePath, defaultProbeTTL
 ├── runner.go               ← RunCrush, RunResult — crush subprocess management
 ├── gate.go                 ← gate_review handler, gateInput, gateOutput
 ├── state.go                ← ReadState, WriteState, ReviewState, validateSlug
@@ -119,6 +127,7 @@ go install .
 | `ESQUISSE_MODEL_SLOT0`–`ESQUISSE_MODEL_SLOT4` | defaults in `models.go` | Override pool slot. Format: `provider/model`. Invalid format → warning + default. |
 | `ESQUISSE_ALLOWED_PROVIDERS` | `""` (all allowed) | Comma-separated provider IDs (case-sensitive). Filters pool at startup. |
 | `ESQUISSE_POOL_FALLBACK_STRICT` | `""` (fail-open) | Set `"1"` to error instead of falling back to full default pool when all slots filtered. |
+| `ESQUISSE_MODEL_CACHE_TTL_DAYS` | `"3"` (3 days) | Availability cache TTL in days. Set to `"0"` to disable disk cache (in-memory only). |
 
 ---
 

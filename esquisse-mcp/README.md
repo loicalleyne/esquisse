@@ -5,7 +5,7 @@ A lightweight MCP stdio server for the [Esquisse](https://github.com/loicalleyne
 Exposes three tools:
 - `adversarial_review` — run N rounds of cross-model adversarial review via `crush run --model`, with family-interleaved randomized model order and enterprise-policy fallback
 - `gate_review` — check all `.adversarial/` verdicts before completing a planning session
-- `discover_models` — list available `provider/model` strings from `crush models`, with optional provider and substring filtering
+- `discover_models` — list available `provider/model` strings with availability statuses from a background-probed cache, with optional filtering
 
 ## Requirements
 
@@ -72,6 +72,26 @@ The pool contains 5 slots defaulting to reasoning-capable models. Model order is
 | `ESQUISSE_MODEL_SLOT0`–`ESQUISSE_MODEL_SLOT4` | see pool table | Override a pool slot. Format: `provider/model`. Invalid format logs a warning and falls back to the default. |
 | `ESQUISSE_ALLOWED_PROVIDERS` | `""` (all allowed) | Comma-separated provider IDs (case-sensitive lowercase). When set, slots whose provider prefix is not in this list are excluded from the pool. Provider IDs are the prefix before `/` in each `provider/model` string — use the `discover_models` tool (or `crush models`) to see which providers are available in your environment. |
 | `ESQUISSE_POOL_FALLBACK_STRICT` | `""` (fail-open) | Set to `"1"` to return an error instead of falling back to the full default pool when all slots are filtered by `ESQUISSE_ALLOWED_PROVIDERS`. |
+| `ESQUISSE_MODEL_CACHE_TTL_DAYS` | `3` | Cache TTL in days for `discover_models` availability probe. Model cache is saved to `~/.config/esquisse-mcp/model-cache.json` (or OS equivalent). |
+
+## Discover Models & Availability Cache
+
+`discover_models` returns a JSON object containing probed model availability data rather than a plain-text list (this is a breaking change from earlier versions).
+
+```json
+{
+  "models": [
+    {"id": "copilot/claude-sonnet-4.6", "provider": "copilot", "available": true},
+    {"id": "gemini/gemini-3.1-pro-preview", "provider": "gemini", "available": false}
+  ],
+  "cached_at": "2026-04-19T14:00:00Z",
+  "stale": false,
+  "probing": false
+}
+```
+
+The server maintains a background goroutine that probes models listed by `crush models` to determine if they are blocked by enterprise policies. The cache is saved atomically to `~/.config/esquisse-mcp/model-cache.json` (or OS equivalent `os.UserConfigDir()`).
+You can pass `force_refresh=true` to `discover_models` to start a new background probe.
 
 ## Multi-Round Reviews
 

@@ -3,10 +3,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // --- effectiveRounds ---
@@ -439,3 +446,342 @@ func TestExcludeModelFilter(t *testing.T) {
 	})
 }
 
+// --- modelProber ---
+
+func TestModelProber(t *testing.T) {
+	t.Parallel()
+
+	setupProber := func(t *testing.T, listModelsFn func(context.Context) ([]string, error), probeFn func(context.Context, string) bool) (*modelProber, string) {
+		tmpDir := t.TempDir()
+		cachePath := filepath.Join(tmpDir, "model-cache.json")
+		p := newModelProberWithFuncs(cachePath, time.Hour, listModelsFn, probeFn)
+		return p, cachePath
+	}
+
+	t.Run("no_cache_returns_probing_state", func(t *testing.T) {
+		t.Parallel()
+		// Gate listModelsFn until after currentState() is called to avoid a race
+		// where the goroutine completes before the read.
+		gate := make(chan struct{})
+		p, _ := setupProber(t, func(ctx context.Context) ([]string, error) {
+			<-gate // block until state has been read
+			return []string{"copilot/a"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		p.startProbe(context.Background())
+		entries, probing, stale, _ := p.currentState()
+		close(gate) // unblock listModelsFn now that we've sampled state
+		if !probing {
+			t.Error("expected probing to be true")
+		}
+		if stale {
+			t.Error("expected stale to be false")
+		}
+		if len(entries) != 0 {
+			t.Errorf("expected 0 entries before probe completes, got %v", entries)
+		}
+		<-p.done // wait for probe to finish before TempDir is removed
+	})
+
+	t.Run("fresh_cache_no_rerun", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		cachePath := filepath.Join(tmpDir, "model-cache.json")
+		cacheData := ModelCache{
+			Entries:        []ModelEntry{{ID: "copilot/cached", Provider: "copilot", Available: true}},
+			CachedAt:       time.Now().Add(-10 * time.Minute),
+			ProbeCompleted: true,
+		}
+		b, _ := json.Marshal(cacheData)
+		os.WriteFile(cachePath, b, 0600)
+
+		listCalls := 0
+		p := newModelProberWithFuncs(cachePath, time.Hour, func(ctx context.Context) ([]string, error) {
+			listCalls++
+			return []string{"copilot/a"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		entries, probing, stale, _ := p.currentState()
+		if probing {
+			t.Error("expected probing false for fresh cache")
+		}
+		if stale {
+			t.Error("expected stale false")
+		}
+		if len(entries) != 1 || entries[0].ID != "copilot/cached" {
+			t.Error("expected cached entries")
+		}
+		if listCalls != 0 {
+			t.Error("expected listModelsFn not to be called")
+		}
+	})
+
+	t.Run("stale_cache_sets_stale_flag", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		cachePath := filepath.Join(tmpDir, "model-cache.json")
+		cacheData := ModelCache{
+			Entries:        []ModelEntry{{ID: "copilot/cached", Provider: "copilot", Available: true}},
+			CachedAt:       time.Now().Add(-2 * time.Hour),
+			ProbeCompleted: true,
+		}
+		b, _ := json.Marshal(cacheData)
+		os.WriteFile(cachePath, b, 0600)
+
+		p := newModelProberWithFuncs(cachePath, time.Hour, func(ctx context.Context) ([]string, error) {
+			return []string{"copilot/new"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		entries, probing, stale, _ := p.currentState()
+		if probing {
+			t.Error("probing shouldn't start automatically just from currentState")
+		}
+		if !stale {
+			t.Error("expected stale true")
+		}
+		if len(entries) != 1 || entries[0].ID != "copilot/cached" {
+			t.Error("expected cached entries to still be returned")
+		}
+	})
+
+	t.Run("force_refresh_resets_state", func(t *testing.T) {
+		t.Parallel()
+		p, _ := setupProber(t, func(ctx context.Context) ([]string, error) {
+			return []string{"copilot/new"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		p.startProbe(context.Background())
+		p.forceRefresh(context.Background())
+
+		// Immediately after forceRefresh, cache is nil and new probe is starting.
+		_, probing, _, _ := p.currentState()
+		if !probing {
+			t.Error("expected probing true after force refresh")
+		}
+
+		// Wait for probe to complete before asserting entries.
+		<-p.done
+
+		entries, _, _, _ := p.currentState()
+		if len(entries) != 1 || entries[0].ID != "copilot/new" {
+			t.Errorf("expected [copilot/new] after probe, got %v", entries)
+		}
+	})
+
+	t.Run("probe_marks_available_true_on_zero_exit", func(t *testing.T) {
+		t.Parallel()
+		p, _ := setupProber(t, func(ctx context.Context) ([]string, error) {
+			return []string{"copilot/a"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		p.startProbe(context.Background())
+		<-p.done // wait for completion
+
+		entries, _, _, _ := p.currentState()
+		if len(entries) != 1 || !entries[0].Available {
+			t.Error("expected available=true")
+		}
+	})
+
+	t.Run("probe_marks_available_false_on_policy_block", func(t *testing.T) {
+		t.Parallel()
+		p, _ := setupProber(t, func(ctx context.Context) ([]string, error) {
+			return []string{"copilot/a"}, nil
+		}, func(ctx context.Context, m string) bool { return false })
+
+		p.startProbe(context.Background())
+		<-p.done
+
+		entries, _, _, _ := p.currentState()
+		if len(entries) != 1 || entries[0].Available {
+			t.Error("expected available=false")
+		}
+	})
+
+	t.Run("corrupted_cache_starts_fresh_probe", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		cachePath := filepath.Join(tmpDir, "model-cache.json")
+		os.WriteFile(cachePath, []byte("not json"), 0600)
+
+		p := newModelProberWithFuncs(cachePath, time.Hour, func(ctx context.Context) ([]string, error) {
+			return []string{"copilot/new"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		// loadCache will fail, cache is nil.
+		entries, _, _, _ := p.currentState()
+		if len(entries) != 0 {
+			t.Error("expected no entries initially")
+		}
+	})
+
+	t.Run("invalid_model_id_in_cache_skipped", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		cachePath := filepath.Join(tmpDir, "model-cache.json")
+		cacheData := ModelCache{
+			Entries: []ModelEntry{
+				{ID: "copilot/good", Provider: "copilot", Available: true},
+				{ID: "!@#evil", Provider: "evil", Available: true},
+			},
+			CachedAt: time.Now(),
+		}
+		b, _ := json.Marshal(cacheData)
+		os.WriteFile(cachePath, b, 0600)
+
+		p := newModelProberWithFuncs(cachePath, time.Hour, nil, nil)
+		entries, _, _, _ := p.currentState()
+		if len(entries) != 1 || entries[0].ID != "copilot/good" {
+			t.Errorf("expected 1 good entry, got %v", entries)
+		}
+	})
+
+	t.Run("probe_marks_available_true_on_transient_error", func(t *testing.T) {
+		t.Parallel()
+		p, _ := setupProber(t, func(ctx context.Context) ([]string, error) {
+			return []string{"copilot/a"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		p.startProbe(context.Background())
+		<-p.done
+
+		entries, _, _, _ := p.currentState()
+		if len(entries) != 1 || !entries[0].Available {
+			t.Error("expected available=true for transient error (fail-open)")
+		}
+	})
+
+	t.Run("structured_response_shape", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		cachePath := filepath.Join(tmpDir, "model-cache.json")
+		cacheData := ModelCache{
+			Entries:        []ModelEntry{{ID: "copilot/a", Provider: "copilot", Available: true}},
+			CachedAt:       time.Now(),
+			ProbeCompleted: true,
+		}
+		b, _ := json.Marshal(cacheData)
+		_ = os.WriteFile(cachePath, b, 0600)
+
+		p := newModelProberWithFuncs(cachePath, time.Hour,
+			func(ctx context.Context) ([]string, error) { return []string{"copilot/a"}, nil },
+			func(ctx context.Context, m string) bool { return true })
+		handler := newDiscoverHandler(p)
+		result, _, err := handler(context.Background(), &mcp.CallToolRequest{}, discoverInput{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Content) == 0 {
+			t.Fatal("expected non-empty Content")
+		}
+		tc, ok := result.Content[0].(*mcp.TextContent)
+		if !ok {
+			t.Fatalf("expected *mcp.TextContent, got %T", result.Content[0])
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal([]byte(tc.Text), &resp); err != nil {
+			t.Fatalf("response is not valid JSON: %v\nraw: %s", err, tc.Text)
+		}
+		for _, key := range []string{"models", "cached_at", "stale", "probing"} {
+			if _, ok := resp[key]; !ok {
+				t.Errorf("response missing key %q: %s", key, tc.Text)
+			}
+		}
+		if models, ok := resp["models"].([]interface{}); !ok || len(models) != 1 {
+			t.Errorf("expected 1 model in response, got %v", resp["models"])
+		}
+		<-p.done // wait for background probe started by handler
+	})
+
+	t.Run("cache_written_atomically", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		cachePath := filepath.Join(tmpDir, "model-cache.json")
+
+		p := newModelProberWithFuncs(cachePath, time.Hour, func(ctx context.Context) ([]string, error) {
+			return []string{"copilot/a"}, nil
+		}, func(ctx context.Context, m string) bool { return true })
+
+		p.startProbe(context.Background())
+		<-p.done
+
+		if _, err := os.Stat(cachePath); err != nil {
+			t.Fatalf("cache file does not exist after probe: %v", err)
+		}
+		dirEntries, err := os.ReadDir(tmpDir)
+		if err != nil {
+			t.Fatalf("failed to read tmp dir: %v", err)
+		}
+		for _, e := range dirEntries {
+			if strings.HasPrefix(e.Name(), "model-cache-") && strings.HasSuffix(e.Name(), ".json") {
+				t.Errorf("leftover temp file found: %s", e.Name())
+			}
+		}
+	})
+}
+
+// TestModelProberFilterAllowedProviders tests that newDiscoverHandler filters
+// entries by ESQUISSE_ALLOWED_PROVIDERS. Extracted from TestModelProber because
+// t.Setenv cannot be called from a subtest whose parent is parallel.
+func TestModelProberFilterAllowedProviders(t *testing.T) {
+	t.Setenv("ESQUISSE_ALLOWED_PROVIDERS", "copilot")
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "model-cache.json")
+	cacheData := ModelCache{
+		Entries: []ModelEntry{
+			{ID: "copilot/a", Provider: "copilot", Available: true},
+			{ID: "gemini/b", Provider: "gemini", Available: true},
+		},
+		CachedAt:       time.Now(),
+		ProbeCompleted: true,
+	}
+	b, _ := json.Marshal(cacheData)
+	_ = os.WriteFile(cachePath, b, 0600)
+
+	p := newModelProberWithFuncs(cachePath, time.Hour,
+		func(ctx context.Context) ([]string, error) { return []string{"copilot/a", "gemini/b"}, nil },
+		func(ctx context.Context, m string) bool { return true })
+	handler := newDiscoverHandler(p)
+	result, _, err := handler(context.Background(), &mcp.CallToolRequest{}, discoverInput{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected *mcp.TextContent, got %T", result.Content[0])
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal([]byte(tc.Text), &resp); err != nil {
+		t.Fatalf("bad JSON: %v", err)
+	}
+	models, ok := resp["models"].([]interface{})
+	if !ok || len(models) != 1 {
+		t.Fatalf("expected 1 copilot model, got %v", resp["models"])
+	}
+	m, ok := models[0].(map[string]interface{})
+	if !ok || m["id"] != "copilot/a" {
+		t.Errorf("unexpected model: %v", models[0])
+	}
+	<-p.done // wait for background probe started by handler
+}
+
+func TestModelProberConcurrentAccess(t *testing.T) {
+	p := newModelProberWithFuncs("", time.Hour, func(ctx context.Context) ([]string, error) {
+		time.Sleep(10 * time.Millisecond)
+		return []string{"copilot/a", "gemini/b"}, nil
+	}, func(ctx context.Context, m string) bool { return true })
+
+	ctx := context.Background()
+	p.startProbe(ctx)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.currentState()
+		}()
+	}
+	wg.Wait()
+	<-p.done
+}

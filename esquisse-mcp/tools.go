@@ -5,7 +5,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func registerTools(server *mcp.Server, projectRoot string) {
+func registerTools(server *mcp.Server, projectRoot string, prober *modelProber) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "adversarial_review",
 		Description: "Dispatch one or more adversarial review rounds for the given plan using a configurable " +
@@ -29,6 +29,8 @@ func registerTools(server *mcp.Server, projectRoot string) {
 		Name: "discover_models",
 		Description: "List available crush models, optionally filtered by a substring. " +
 			"Respects ESQUISSE_ALLOWED_PROVIDERS to show only permitted models. " +
-			"Use this tool to verify which models are accessible before running adversarial_review.",
-	}, newDiscoverHandler())
+			"Use this tool to verify which models are accessible before running adversarial_review. " +
+			"Returns a JSON string containing an array of models, cache state (cached_at, stale, probing). " +
+			"Set force_refresh=true to clear the cache and trigger a new background probe. TTL is configured via ESQUISSE_MODEL_CACHE_TTL_DAYS.",
+	}, newDiscoverHandler(prober))
 }
