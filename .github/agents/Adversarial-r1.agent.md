@@ -70,8 +70,9 @@ Classify each finding:
 ### Step 3: Write the report
 
 Write the completed report to:
-`.adversarial/reports/review-{YYYY-MM-DD}-iter{N}.md`
+`.adversarial/reports/review-{YYYY-MM-DD}-iter{N}-r{round}-{plan-slug}.md`
 
+When dispatched directly (single round), `{round}` is `1`.
 Use the template from `skills/adversarial-review/references/report-template.md`
 exactly. Fill every section. Do not omit sections — write "None identified"
 if an attack found nothing.
@@ -80,7 +81,8 @@ The FINAL non-empty line of the report file MUST be exactly:
 ```
 Verdict: PASSED
 ```
-(or CONDITIONAL or FAILED). This line is machine-read by `gate-review.sh`.
+(or CONDITIONAL or FAILED). This line is machine-read by `gate-review.sh`
+and the `esquisse-mcp` `adversarial_review` tool.
 
 ### Step 4: Update state file
 

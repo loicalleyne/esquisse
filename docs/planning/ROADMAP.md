@@ -53,6 +53,13 @@ correctly in both VS Code Copilot Chat and Crush.
 | P2-004-run-phase-gate-skill | ⬜ Not Started | New skill: run the phase gate checklist interactively |
 | P2-005-markdown-gate-adapter | ✅ Done | `gate-check.sh` no-build adapter for pure-markdown projects |
 | [P2-006-mcp-configurable-model-rotation](../tasks/P2-006-mcp-configurable-model-rotation.md) | ✅ Done | 5-slot configurable model pool, multi-round reviews, family-interleaved randomization, enterprise policy fallback, `discover_models` tool |
+| [P2-007-planning-artifact-schema](../tasks/P2-007-planning-artifact-schema.md) | ⬜ Ready | New doc type: Planning Artifact schema (\u00a710) + protocol wired into EsquissePlan and FRAMEWORK.md |
+| [P2-008-planning-artifact-consumption](../tasks/P2-008-planning-artifact-consumption.md) | ⬜ Ready | implement-task skill Step 2b; docs/artifacts/ in init.sh + upgrade.sh |
+| [P2-009-write-planning-artifact-mcp-tool](../tasks/P2-009-write-planning-artifact-mcp-tool.md) | ✅ Done | esquisse-mcp `write_planning_artifact` tool |
+| [P2-010-prerequisite-injection-schema](../tasks/P2-010-prerequisite-injection-schema.md) | ⬜ Ready | Prerequisite blockquote in task doc schema + EsquissePlan protocol + FRAMEWORK.md |
+| [P2-011-prerequisite-injection-mcp](../tasks/P2-011-prerequisite-injection-mcp.md) | ⬜ Ready | `write_planning_artifact` injects blockquote into referenced task files; extends output |
+| [P2-012-eliminate-bare-python-in-scripts](../tasks/P2-012-eliminate-bare-python-in-scripts.md) | ✅ Done | Replace bare `python3` JSON calls in gate-review.sh and upgrade.sh with `jq` + grep/sed fallback |
+| [P2-013-ast-planning-context](../tasks/P2-013-ast-planning-context.md) | ✅ Done | `planning_context` DDL + macros; EsquissePlan Step 2c; implement-task drift check + orientation |
 
 ---
 

@@ -21,8 +21,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const defaultRounds = 5
-const maxRounds = 50
+const (
+	defaultRounds = 5
+	maxRounds     = 50
+)
 
 // defaultModels is the default 5-slot model pool.
 var defaultModels = []string{
@@ -87,6 +89,7 @@ var modelUnavailablePatterns = []string{
 	"access to this model",
 	"model access denied",
 	"this model is not available",
+	"not supported via",
 }
 
 // runCrushFn is the function used to invoke crush — replaceable in tests.
@@ -301,6 +304,37 @@ func worstVerdict(verdicts []string) string {
 	return worst
 }
 
+// filterAvailableModels returns pool with any models the prober has confirmed
+// unavailable removed. Fail-open: if the prober has no data or all models would
+// be removed, returns pool unchanged.
+func filterAvailableModels(pool []string, prober *modelProber) []string {
+	if prober == nil {
+		return pool
+	}
+	entries, _, _, _ := prober.currentState()
+	if len(entries) == 0 {
+		return pool
+	}
+	avail := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		avail[e.ID] = e.Available
+	}
+	filtered := make([]string, 0, len(pool))
+	for _, m := range pool {
+		av, known := avail[m]
+		if !known || av {
+			filtered = append(filtered, m)
+		} else {
+			log.Printf("esquisse-mcp: model %q excluded by probe cache (marked unavailable)", m)
+		}
+	}
+	if len(filtered) == 0 {
+		log.Printf("esquisse-mcp: probe cache would empty pool; using full pool (fail-open)")
+		return pool
+	}
+	return filtered
+}
+
 // isModelUnavailable reports whether the crush output indicates the model is
 // blocked by enterprise policy.
 func isModelUnavailable(output string) bool {
@@ -407,7 +441,7 @@ func newDiscoverHandler(prober *modelProber) func(context.Context, *mcp.CallTool
 		entries, probing, stale, cachedAt := prober.currentState()
 
 		var models []ModelEntry
-		
+
 		// Apply ESQUISSE_ALLOWED_PROVIDERS filter (same logic as buildModelPool).
 		allowedRaw := os.Getenv("ESQUISSE_ALLOWED_PROVIDERS")
 		var allowedSet map[string]bool
@@ -484,13 +518,13 @@ type ModelCache struct {
 // All exported-accessible state is protected by mu.
 // Holds injectable listModelsFn and probeFn for test substitution.
 type modelProber struct {
-	mu           sync.RWMutex
-	cache        *ModelCache
-	probing      bool
-	cancelProbe  context.CancelFunc
-	done         chan struct{} // closed when current probe completes
-	cachePath    string
-	ttl          time.Duration
+	mu          sync.RWMutex
+	cache       *ModelCache
+	probing     bool
+	cancelProbe context.CancelFunc
+	done        chan struct{} // closed when current probe completes
+	cachePath   string
+	ttl         time.Duration
 	// Injectable for testing — set via newModelProberWithFuncs.
 	listModelsFn func(ctx context.Context) ([]string, error)
 	probeFn      func(ctx context.Context, model string) bool
@@ -538,8 +572,28 @@ func newModelProber(cachePath string, ttl time.Duration) *modelProber {
 		}
 		return models, nil
 	}, func(ctx context.Context, model string) bool {
-		// Pass empty temp file content since we just want to see if it executes at all
-		res, err := runCrushFn(ctx, model, "/dev/null")
+		// Use a minimal non-empty prompt so crush actually calls the model API.
+		// An empty prompt (/dev/null) causes crush to exit 0 without making an API
+		// request, so enterprise policy blocks (e.g. "not supported via Responses API")
+		// are never surfaced and the model is incorrectly marked available.
+		tmp, err := os.CreateTemp("", "esquisse-probe-*.txt")
+		if err != nil {
+			log.Printf("esquisse-mcp: probe: failed to create temp file for model %q: %v", model, err)
+			return true // fail-open
+		}
+		tmpName := tmp.Name()
+		defer os.Remove(tmpName)
+		if _, err := fmt.Fprint(tmp, "Reply with the single word: OK"); err != nil {
+			_ = tmp.Close()
+			log.Printf("esquisse-mcp: probe: failed to write temp file for model %q: %v", model, err)
+			return true // fail-open
+		}
+		if err := tmp.Close(); err != nil {
+			log.Printf("esquisse-mcp: probe: failed to close temp file for model %q: %v", model, err)
+			return true // fail-open
+		}
+
+		res, err := runCrushFn(ctx, model, tmpName)
 		if err != nil {
 			return false
 		}
@@ -549,7 +603,7 @@ func newModelProber(cachePath string, ttl time.Duration) *modelProber {
 		if isModelUnavailable(res.Output) {
 			return false
 		}
-		return true // transient, fail-open
+		return true // transient error — fail-open
 	})
 }
 

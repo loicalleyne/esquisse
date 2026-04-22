@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -35,14 +36,14 @@ func extractVerdict(output string) string {
 
 // adversarialInput is the input schema for the adversarial_review tool.
 type adversarialInput struct {
-	PlanSlug        string `json:"plan_slug"         jsonschema:"Plan slug used as state file name"`
-	PlanContent     string `json:"plan_content"      jsonschema:"Full text of the plan to review"`
-	Rounds          int    `json:"rounds,omitempty"  jsonschema:"Number of review rounds (default 5, max 50)"`
+	PlanSlug     string `json:"plan_slug"         jsonschema:"Plan slug used as state file name"`
+	PlanContent  string `json:"plan_content"      jsonschema:"Full text of the plan to review"`
+	Rounds       int    `json:"rounds,omitempty"  jsonschema:"Number of review rounds (default 5, max 50)"`
 	ExcludeModel string `json:"exclude_model,omitempty" jsonschema:"Full model ID to exclude from review pool (e.g. copilot/claude-sonnet-4.6). Obtain from crush_info tool. Empty or omitted = no exclusion."`
 }
 
-func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallToolRequest, adversarialInput) (*mcp.CallToolResult, any, error) {
-	pool := buildModelPool()
+func newAdversarialHandler(projectRoot string, prober *modelProber) func(context.Context, *mcp.CallToolRequest, adversarialInput) (*mcp.CallToolResult, any, error) {
+	staticPool := buildModelPool()
 	return func(ctx context.Context, req *mcp.CallToolRequest, input adversarialInput) (*mcp.CallToolResult, any, error) {
 		if strings.TrimSpace(input.PlanContent) == "" {
 			return mcpErr("plan_content must not be empty")
@@ -50,9 +51,12 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 		if strings.TrimSpace(input.PlanSlug) == "" {
 			return mcpErr("plan_slug must not be empty")
 		}
-		if len(pool) == 0 {
+		if len(staticPool) == 0 {
 			return mcpErr("all model slots excluded by ESQUISSE_ALLOWED_PROVIDERS — set ESQUISSE_POOL_FALLBACK_STRICT=0 or allow at least one provider")
 		}
+		// Filter out models the prober has confirmed unavailable (e.g. "not supported
+		// via Responses API"). Fail-open: if no probe data exists yet, uses full pool.
+		pool := filterAvailableModels(staticPool, prober)
 		effectivePool := excludeModelFilter(pool, input.ExcludeModel)
 
 		state, err := ReadState(projectRoot, input.PlanSlug)
@@ -98,7 +102,16 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 
 			verdict := extractVerdict(output)
 			if verdict == "" {
-				log.Printf("esquisse-mcp: round %d produced no valid Verdict: line", roundNum)
+				// Fallback: the model may have written the verdict to the report file
+				// without echoing it to stdout. Read the file and re-extract.
+				reportPath := filepath.Join(projectRoot, ".adversarial", "reports",
+					fmt.Sprintf("review-%s-iter%d-r%d-%s.md", date, state.Iteration+roundIdx, roundNum, input.PlanSlug))
+				if data, ferr := os.ReadFile(reportPath); ferr == nil {
+					verdict = extractVerdict(string(data))
+				}
+				if verdict == "" {
+					log.Printf("esquisse-mcp: round %d produced no valid Verdict: line in output or report file", roundNum)
+				}
 			}
 			roundOutputs = append(roundOutputs,
 				fmt.Sprintf("=== Round %d/%d — %s ===\n%s", roundNum, rounds, usedModel, output))

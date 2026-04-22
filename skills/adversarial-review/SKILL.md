@@ -143,7 +143,8 @@ Instruction to reviewer:
 ```
 You are Adversarial-r{slot}. Apply the 7-attack protocol from the attached
 task-review-protocol.md to the plan below. Use the report template. Write
-your report to .adversarial/reports/review-{date}-iter{iteration}-{plan-slug}.md
+your report to .adversarial/reports/review-{date}-iter{iteration}-r{round}-{plan-slug}.md
+(round=1 for single-dispatch)
 and write state to .adversarial/{plan-slug}.json (plan_slug: "{plan-slug}").
 Schema: SCHEMAS.md §8. Your job is to BREAK this plan, not to approve it.
 If you cannot find serious problems, you are not looking hard enough.

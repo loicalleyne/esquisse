@@ -5,12 +5,12 @@
 #
 # Safe to run on any project that was bootstrapped with init.sh. Overwrites
 # only Esquisse-managed infrastructure files. Never touches:
-#   - AGENTS.md, ONBOARDING.md, GLOSSARY.md, NEXT_STEPS.md
+#   - AGENTS.md, ONBOARDING.md, GLOSSARY.md, docs/planning/NEXT_STEPS.md
 #   - docs/tasks/*, docs/planning/*, docs/adr/*
 #   - .github/hooks/hooks.json (project may have customised it)
-#   - skills/ directories OTHER than adversarial-review (user may have edited)
 #
 # What gets overwritten (Esquisse infrastructure — not user-authored):
+#   - docs/artifacts/ directory (created if absent, contents never touched)
 #   - scripts/gate-review.sh
 #   - scripts/gate-check.sh
 #   - scripts/new-task.sh
@@ -20,6 +20,10 @@
 #   - ~/.copilot/agents/Adversarial-r0.agent.md  (user-level)
 #   - ~/.copilot/agents/Adversarial-r1.agent.md  (user-level)
 #   - ~/.copilot/agents/Adversarial-r2.agent.md  (user-level)
+#   - skills/adversarial-review/  (full overwrite)
+#   - skills/write-spec/          (full overwrite)
+#   - skills/explore-codebase/    (full overwrite)
+#   - skills/implement-task/      (full overwrite)
 #
 # Migration performed automatically (in addition to state.json above):
 #   - .github/agents/EsquissePlan.agent.md removed from target project
@@ -86,6 +90,8 @@ overwrite_file() {
 # ── 1. Scripts ────────────────────────────────────────────────────────────────
 echo "Scripts:"
 mkdir -p scripts
+mkdir -p docs/artifacts
+echo "  ensured  docs/artifacts/"
 for item in gate-review.sh gate-check.sh new-task.sh rebuild-ast.sh macros.sql macros_go.sql; do
     src="${SCRIPT_DIR}/${item}"
     dst="${TARGET_DIR}/scripts/${item}"
@@ -163,7 +169,22 @@ overwrite_file \
     "${ESQUISSE_DIR}/SCHEMAS.md" \
     "${TARGET_DIR}/docs/SCHEMAS.md" \
     "docs/SCHEMAS.md"
-
+# ── 5b. Ensure docs/planning/NEXT_STEPS.md exists (create or migrate root copy) ─────
+echo ""
+echo "Session state:"
+mkdir -p "${TARGET_DIR}/docs/planning"
+NEXT_STEPS_CANONICAL="${TARGET_DIR}/docs/planning/NEXT_STEPS.md"
+NEXT_STEPS_ROOT="${TARGET_DIR}/NEXT_STEPS.md"
+if [[ -f "$NEXT_STEPS_CANONICAL" ]]; then
+    echo "  exists   docs/planning/NEXT_STEPS.md  (not modified)"
+elif [[ -f "$NEXT_STEPS_ROOT" ]]; then
+    mv "$NEXT_STEPS_ROOT" "$NEXT_STEPS_CANONICAL"
+    echo "  migrated NEXT_STEPS.md → docs/planning/NEXT_STEPS.md"
+else
+    printf '# NEXT_STEPS.md\n\n## Active Task\n\nNone.\n\n## Session Notes\n\n<!-- Agent: append a timestamped bullet after each session. -->\n\n## Blocked Items\n\nNone.\n\n## Deferred Work\n\nNone.\n' \
+        > "$NEXT_STEPS_CANONICAL"
+    echo "  created  docs/planning/NEXT_STEPS.md"
+fi
 # ── 6. Migrate .adversarial/state.json → per-plan files ──────────────────────
 echo ""
 echo "Adversarial state migration:"
@@ -172,37 +193,15 @@ OLD_STATE=".adversarial/state.json"
 if [[ ! -f "$OLD_STATE" ]]; then
     echo "  no state.json found — nothing to migrate."
 else
-    # Read fields using python3 (required by gate-review.sh anyway).
-    if ! command -v python3 &>/dev/null; then
-        echo "  WARNING: python3 not found. Cannot auto-migrate ${OLD_STATE}." >&2
-        echo "  Manually rename it to .adversarial/{plan-slug}.json and add" >&2
-        echo "  \"plan_slug\": \"{slug}\" per SCHEMAS.md §8." >&2
+    if ! command -v jq &>/dev/null; then
+        echo "  WARNING: jq not found. Cannot auto-migrate ${OLD_STATE}." >&2
+        echo "  Install jq (e.g. sudo apt-get install jq) and re-run, or migrate manually." >&2
+        echo "  See SCHEMAS.md §8 for the required per-plan file format." >&2
     else
-        LAST_VERDICT="$(python3 -c "
-import json
-try:
-    d = json.load(open('$OLD_STATE'))
-    print(d.get('last_verdict', d.get('verdict', '')))
-except Exception:
-    print('')
-" 2>/dev/null || echo "")"
+        LAST_VERDICT="$(jq -r '.last_verdict // .verdict // ""' "$OLD_STATE" 2>/dev/null || echo "")"
+        PLAN_PATH="$(jq -r '.plan // ""' "$OLD_STATE" 2>/dev/null || echo "")"
 
-        PLAN_PATH="$(python3 -c "
-import json
-try:
-    d = json.load(open('$OLD_STATE'))
-    print(d.get('plan', ''))
-except Exception:
-    print('')
-" 2>/dev/null || echo "")"
-
-        # Derive slug from plan path, or fall back to "migrated-state".
-        if [[ -n "$PLAN_PATH" ]]; then
-            RAW_SLUG="$(basename "$PLAN_PATH" .md)"
-        else
-            RAW_SLUG="migrated-state"
-        fi
-        # Lowercase and replace spaces with hyphens.
+        # Derive kebab-case slug from plan path, or fall back to "migrated-state".
         SLUG="$(echo "$PLAN_PATH" | xargs -I{} basename {} .md | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
         [[ -z "$SLUG" ]] && SLUG="migrated-state"
 
@@ -213,36 +212,25 @@ except Exception:
             echo "  Rename or delete ${OLD_STATE} manually after verifying."
         else
             # Add plan_slug field to the existing JSON and write new file.
-            python3 -c "
-import json, sys
-with open('$OLD_STATE') as f:
-    d = json.load(f)
-# Normalise: ensure last_verdict field exists (handle legacy 'verdict').
-if 'verdict' in d and 'last_verdict' not in d:
-    d['last_verdict'] = d.pop('verdict')
-# Inject plan_slug at the top.
-out = {'plan_slug': '$SLUG'}
-out.update(d)
-with open('$NEW_STATE', 'w') as f:
-    json.dump(out, f, indent=2)
-print('ok')
-" 2>/dev/null && {
+            # Handle legacy 'verdict' → 'last_verdict' rename if needed.
+            # Write to a temp file first to avoid creating a 0-byte $NEW_STATE on jq failure,
+            # which would permanently block future migration attempts.
+            TMP_STATE="${NEW_STATE}.tmp"
+            if jq --arg slug "$SLUG" \
+                'if has("verdict") and (has("last_verdict") | not)
+                 then {plan_slug: $slug} + (del(.verdict) + {last_verdict: .verdict})
+                 else {plan_slug: $slug} + .
+                 end' "$OLD_STATE" > "$TMP_STATE" 2>/dev/null; then
+                mv "$TMP_STATE" "$NEW_STATE"
                 echo "  migrated  ${OLD_STATE} → ${NEW_STATE}  (verdict: ${LAST_VERDICT:-unknown})"
                 # Mark old file as deprecated stub so gate-review.sh won't double-count it.
-                python3 -c "
-import json
-stub = {
-  'plan_slug': '_deprecated_migrated',
-  'iteration': 0,
-  'last_model': 'upgrade.sh',
-  'last_verdict': 'PASSED',
-  'last_review_date': '$(date +%Y-%m-%d)',
-  '_note': 'Deprecated by upgrade.sh. Superseded by ${NEW_STATE}. Safe to delete.'
-}
-with open('$OLD_STATE', 'w') as f:
-    json.dump(stub, f, indent=2)
-" 2>/dev/null && echo "  stubbed   ${OLD_STATE}  (safe to delete)"
-            } || echo "  ERROR: migration failed — check ${OLD_STATE} manually against SCHEMAS.md §8." >&2
+                printf '{\n  "plan_slug": "_deprecated_migrated",\n  "iteration": 0,\n  "last_model": "upgrade.sh",\n  "last_verdict": "PASSED",\n  "last_review_date": "%s",\n  "_note": "Deprecated by upgrade.sh. Superseded by %s. Safe to delete."\n}\n' \
+                    "$(date +%Y-%m-%d)" "$NEW_STATE" > "$OLD_STATE" \
+                    && echo "  stubbed   ${OLD_STATE}  (safe to delete)"
+            else
+                rm -f "$TMP_STATE"
+                echo "  ERROR: migration failed — check ${OLD_STATE} manually against SCHEMAS.md §8." >&2
+            fi
         fi
     fi
 fi

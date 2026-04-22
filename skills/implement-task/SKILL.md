@@ -53,6 +53,27 @@ Extract and hold:
 - Out of Scope list (guard against scope creep)
 - Any `Depends on:` prerequisites
 
+#### Step 2b — Load Planning Artifacts
+
+If the task doc contains a `## Planning Artifacts` section:
+
+For each row in the Planning Artifacts table:
+1. Read the linked artifact file from `docs/artifacts/`.
+2. Read **only the sections named in "What to read from it"** — not the full file.
+   Example: "API Surface, Anti-Patterns" → read those two sections, skip the rest.
+3. Hold the loaded facts as working context for Steps 6+.
+4. If the artifact's word count is not known: after reading the requested sections,
+   estimate whether the content is unusually large (> 600 words). If so, note it in
+   Session Notes and read only the subsections most directly relevant to the current task.
+
+If an artifact file is missing (path in table but file does not exist):
+- Note in Session Notes: `MISSING ARTIFACT: {path} — proceeding without it.`
+- Do NOT attempt to reconstruct the artifact's content from training data.
+  Hallucinated API surfaces are the failure mode this mechanism exists to prevent.
+
+If the task doc has no `## Planning Artifacts` section, skip this step entirely.
+A missing section means no external research was needed — do not search for artifacts speculatively.
+
 #### Step 3 — Establish Baseline
 
 Run the full test suite **before touching any code**:
@@ -67,7 +88,82 @@ Record the pass/fail count. If tests are already failing: document in
 Session Notes before writing any code. Do NOT let pre-existing failures
 be attributed to changes made in this session.
 
+#### Step 3b — Planning Context Drift Check
+
+If `code_ast.duckdb` exists, check for symbol drift and missing symbols before touching any file:
+
+> **AST Freshness:** Ensure the `ast` table is current before running drift or
+> missing-symbol queries. If Go source files have changed since planning,
+> run `bash scripts/rebuild-ast.sh` to rebuild. Stale AST produces false
+> negatives (drift not detected) or false positives (symbols appear missing).
+>
+> Before running queries below, verify `ast` is non-empty:
+> ```sql
+> SELECT count(*) FROM ast;
+> ```
+> If the result is 0: print
+> `[WARN] ast table is empty — drift and missing-symbol queries will return 0 rows and cannot be trusted. Run bash scripts/rebuild-ast.sh and verify it scans Go source files.`
+> Skip the drift and missing-symbol queries. Do **not** interpret 0-row results as "no drift".
+
+**Line drift (symbol moved within same file):**
+```sql
+LOAD sitting_duck;
+.read scripts/macros.sql
+SELECT * FROM planning_drift('{task_id}');
+```
+If any rows returned: log `DRIFT DETECTED: {symbol_name} planned_line={planned_line} current_line={current_line}` to Session Notes. Advisory — do not block implementation.
+
+**Missing symbols (symbol deleted or moved to different file):**
+```sql
+LOAD sitting_duck;
+.read scripts/macros.sql
+SELECT p.symbol_name, p.file_path, p.role
+FROM planning_context p
+WHERE p.task_id = '{task_id}'
+  AND NOT EXISTS (
+      SELECT 1 FROM ast a
+      WHERE a.name      = p.symbol_name
+        AND a.file_path = p.file_path
+  );
+```
+If any rows returned: print
+`[WARN] MISSING SYMBOL: {symbol_name} at {file_path} (role={role}) — may have moved or been deleted`
+as a visible line in chat output and log to Session Notes.
+Advisory — do not block implementation, but treat as high-priority investigation points.
+
 #### Step 4 — Orient
+
+Orient to the codebase using the sub-steps below before writing any code.
+
+#### Step 4a — Query planning_context First
+
+When `code_ast.duckdb` exists, first verify the `planning_context` table is present:
+```sql
+SELECT count(*) FROM information_schema.tables
+WHERE table_name = 'planning_context';
+```
+If the result is 0: print
+`[WARN] planning_context table absent — EsquissePlan macros may not have been run for this project. Falling back to raw file orientation.`
+then skip to Step 4b.
+
+If the table exists, query it:
+```sql
+LOAD sitting_duck;
+SELECT task_id, role, symbol_kind, symbol_name, file_path, line_start, line_end
+FROM planning_context
+WHERE task_id = '{task_id}'
+  AND role IN ('modify', 'implement')
+ORDER BY role, file_path, line_start;
+```
+If the result is empty: print
+`[WARN] planning_context has no rows for task {task_id} — capture may not have run. Falling back to raw file orientation.`
+then proceed with Step 4b.
+
+Otherwise, use these rows as the definitive list of integration points. Read
+raw source only for symbols not found in `planning_context`, or when
+`signature` is NULL.
+
+#### Step 4b — Raw File Orientation
 
 For each file in the task doc's Files table:
 

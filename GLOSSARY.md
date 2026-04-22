@@ -40,3 +40,6 @@ never invent alternatives for concepts that already have names here.
 | **P0** | The foundation phase of any project. Establishes the project scaffold: module, CI, core types, interfaces, AGENTS.md. No production features yet. |
 | **Stub** | An incomplete function body left as `panic("TODO P{n}-{nnn}: ...")` when a session must end before the task is complete. Stubs are caught by `gate-check.sh`. |
 | **Dogfood** | Applying Esquisse's own framework to the Esquisse repository itself — AGENTS.md, ONBOARDING.md, GLOSSARY.md, phase-gated task docs, trigger tests, ROADMAP. |
+| **`planning_context`** | A DuckDB table in `code_ast.duckdb` that stores pinned AST symbol snapshots (one row per symbol per task) created by EsquissePlan during Step 2c. Consumed by `implement-task` Step 3b (drift detection) and Step 4a (orientation). |
+| **symbol snapshot** | A single row in `planning_context` recording a symbol's name, file path, line numbers, and signature as captured at planning time. |
+| **drift detection** | The process of comparing `planning_context` line numbers against the current `ast` table to identify symbols that have moved since planning. Performed at Step 3b of `implement-task`. Advisory only — never blocks implementation. |

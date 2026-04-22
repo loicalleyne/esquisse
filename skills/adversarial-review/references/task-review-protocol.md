@@ -233,7 +233,8 @@ finding across all attacks.
 
 After completing all 7 attacks:
 
-1. Write the report to `.adversarial/reports/review-{YYYY-MM-DD}-iter{N}.md`
+1. Write the report to `.adversarial/reports/review-{YYYY-MM-DD}-iter{N}-r{round}-{plan-slug}.md`
+   (round=1 for single-dispatch; plan-slug and round provided in the dispatch instruction)
    using the report template at
    `skills/adversarial-review/references/report-template.md`.
 

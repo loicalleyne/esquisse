@@ -219,6 +219,9 @@ Examples: `P2-001-files-tools.md`, `P3-007-conversation-intelligence.md`
 ````markdown
 # P{n}-{nnn}: {Title}
 
+> **Prerequisite:** Read `docs/artifacts/{YYYY-MM-DD}-{slug}.md` before writing any code in this phase.
+<!-- One > Prerequisite line per artifact. Omit this block entirely when no artifacts apply. -->
+
 ## Status
 <!-- One of: Draft | Ready | In Progress | In Review | Done | Blocked -->
 Status: Ready
@@ -314,6 +317,14 @@ All pre-existing tests must continue to pass. Regressions are blocking.
 | `{path}` | Modify | {what changes} |
 | `{path}` | Delete | {why} |
 | `gen/{path}` | Generated | Run `{command}` to regenerate |
+
+## Planning Artifacts
+<!-- Omit this section entirely when no external research artifacts are needed. -->
+| Artifact | What to read from it |
+|----------|---------------------|
+| [docs/artifacts/{YYYY-MM-DD}-{slug}.md](../artifacts/{YYYY-MM-DD}-{slug}.md) | API Surface, Anti-Patterns |
+
+**Optional: `## Planning Artifacts`** — If EsquissePlan ran `capture_planning_context` during Step 2c, a `## Planning Artifacts` section may be present listing the symbols captured into `planning_context` in `code_ast.duckdb`. This is informational — `implement-task` queries `planning_context` directly; this section is for human reference only.
 
 ## Design Principles
 2-5 principles constraining implementation choices for this task.
@@ -605,3 +616,173 @@ this schema exactly and derive the slug with the rule above.
 Delete `.adversarial/{plan-slug}.json` once a plan has been fully implemented
 and merged. Do not leave FAILED state files from abandoned plans — they will
 permanently block the Stop hook. Either fix them to PASSED or delete them.
+
+---
+
+## 9. Adversarial Review Report Schema (`.adversarial/reports/review-{date}-iter{N}-r{round}-{plan-slug}.md`)
+
+**Canonical source of truth** for the report file format written by adversarial reviewers
+and by the `esquisse-mcp` `adversarial_review` tool. The state file (§8) records the
+*verdict*; the report file contains the *rationale*.
+
+### File naming convention
+
+```
+.adversarial/reports/review-{YYYY-MM-DD}-iter{N}-r{round}-{plan-slug}.md
+```
+
+| Segment | Source |
+|---------|--------|
+| `{YYYY-MM-DD}` | UTC date the review ran |
+| `iter{N}` | Value of `iteration` in the state file **at the start of this review run** |
+| `r{round}` | 1-based round number within a multi-round run |
+| `{plan-slug}` | Same slug used for the state file (see §8 slug derivation) |
+
+Examples:
+| State file | Report file (round 1 of 1) |
+|---|---|
+| `.adversarial/roadmap.json` | `.adversarial/reports/review-2026-04-21-iter0-r1-roadmap.md` |
+| `.adversarial/P8-002-pipeline.json` | `.adversarial/reports/review-2026-04-21-iter2-r1-P8-002-pipeline.md` |
+
+### Required content
+
+```markdown
+# Adversarial Review Report: {plan title}
+
+**Plan:** {plan slug or document path}
+**Reviewer:** {model identifier}
+**Iteration:** {N}
+**Date:** {YYYY-MM-DD}
+
+---
+
+## Attack Results
+
+| # | Attack Vector | Result | Notes |
+|---|---|---|---|
+| 1 | False assumptions | PASSED\|CONDITIONAL\|FAILED | … |
+| 2 | Edge cases | PASSED\|CONDITIONAL\|FAILED | … |
+| 3 | Security | PASSED\|CONDITIONAL\|FAILED | … |
+| 4 | Logic contradictions | PASSED\|CONDITIONAL\|FAILED | … |
+| 5 | Context blindness | PASSED\|CONDITIONAL\|FAILED | … |
+| 6 | Failure modes | PASSED\|CONDITIONAL\|FAILED | … |
+| 7 | Hallucination | PASSED\|CONDITIONAL\|FAILED | … |
+
+---
+
+## Critical Issues (must fix before implementation)
+
+{one subsection per FAILED attack vector, or "None." if all passed}
+
+---
+
+## Major Issues (should fix before proceeding)
+
+{one subsection per CONDITIONAL attack vector, or "None."}
+
+---
+
+Verdict: PASSED|CONDITIONAL|FAILED
+```
+
+### Rules
+
+1. **The `Verdict:` line is mandatory and must be the last non-blank line.** Format exactly:
+   `Verdict: PASSED` / `Verdict: CONDITIONAL` / `Verdict: FAILED` — no bold, no prefix.
+   The `esquisse-mcp` handler and `gate-review.sh` both use the regex `^Verdict:\s*(PASSED|CONDITIONAL|FAILED)`.
+
+2. **Overall verdict is the worst single-attack verdict.** FAILED > CONDITIONAL > PASSED.
+
+3. **One report file per round.** Multi-round runs produce multiple files; state.json tracks
+   the worst verdict across all rounds.
+
+4. **Never edit a report file after writing.** Reports are immutable once created. Create a
+   new report in the next iteration instead.
+
+### Who writes these files
+
+The `adversarial_review` MCP tool instructs the crush model to write the file, and reads it
+back to extract the verdict if the model did not echo the `Verdict:` line to stdout. Either path
+must produce a valid report file. Adversarial-r* `.agent.md` agents write the file directly
+when dispatched manually via `runSubagent`.
+
+---
+
+## 10. Planning Artifact Schema (`docs/artifacts/{YYYY-MM-DD}-{slug}.md`)
+
+A condensed, immutable research document produced by EsquissePlan. Externalises
+verified facts about external libraries and integration points so implementor agents
+can load them without relying on training data.
+
+### File Naming
+
+```
+docs/artifacts/{YYYY-MM-DD}-{slug}.md
+```
+
+- `{YYYY-MM-DD}` — UTC date the artifact was produced (freshness signal)
+- `{slug}` — kebab-case topic identifier, e.g. `franz-go-consumer-api`
+- No phase prefix: artifacts span phase boundaries
+
+### Full Schema
+
+````markdown
+# Artifact: {Title}
+
+**Primary Source:** {top-level resource: URL | library module path | "AST analysis of {package}"}
+**Date:** {YYYY-MM-DD}
+**Produced by:** EsquissePlan
+**Referenced by:** [P{n}-{nnn}-{slug}](../tasks/P{n}-{nnn}-{slug}.md), ...
+
+---
+
+## Summary
+2-3 sentences. What this artifact covers and why it matters.
+The implementor agent reads this first to decide if the full artifact is relevant.
+
+## API Surface / Key Facts
+Each row is a verified, individually sourced fact. **A fact with no traceable source must not be included** — omit rather than infer from training data.
+
+| Symbol / Field | Exact Signature or Value | Source |
+|---|---|---|
+| `NewClient` | `func NewClient(opts ...Opt) (*Client, error)` | `go doc github.com/twmb/franz-go/pkg/kgo.NewClient` |
+
+For non-function facts (config fields, constants, enum values), the Source column should be a file path + line number or URL anchor.
+
+## Constraints
+Hard limits the implementor must respect.
+Format: `MUST {rule}` or `MUST NOT {rule}`, followed by a parenthetical source.
+Example: `MUST NOT share a Client across goroutines (source: go doc kgo.Client)`
+
+A constraint with no traceable source must not be included.
+
+## Anti-Patterns
+What the implementor must not do, with the correct alternative.
+Format: Wrong / Right / Why (mirrors AGENTS.md Common Mistakes).
+
+## Minimal Examples
+Copy-paste–correct code snippets for the critical integration points only.
+Omit this section if no code examples are necessary.
+````
+
+### Rules
+
+**Grounding rule:** EsquissePlan must perform the retrieval (run `go doc`, fetch the URL, read the file) before writing each fact. A fact that cannot be attributed to a specific retrieval must be omitted.
+
+**Threshold rule (inline vs. artifact):**
+
+| Condition | Action |
+|---|---|
+| External research needed by ≥ 2 tasks | Produce artifact in `docs/artifacts/` |
+| Research would exceed ~400 tokens in Specification | Produce artifact |
+| Single-task, ≤ 400 tokens, no sharing | Inline in Specification — no artifact |
+
+**Immutability rule:** Artifacts are immutable once written. If research becomes stale, EsquissePlan creates a new artifact with a new date and slug. The old file is NOT deleted — existing task references remain valid. Update `Referenced by:` in the new file only.
+
+**Platform-consistency rule:** `SCHEMAS.md §10` is the single source of truth for artifact format. The `write_planning_artifact` MCP tool (P2-009) enforces this mechanically; EsquissePlan enforces it behaviourally.
+
+**Internal-only rule:** Artifacts are for external dependencies and integrations only. AGENTS.md, GLOSSARY.md, llms.txt, and llms-full.txt cover internal surfaces. Do not produce artifacts for internal project code.
+
+**Co-update rule:** Any change to the required section list in §10 MUST be reflected in `skills/implement-task/SKILL.md` Step 2b, and vice versa. Both files must name the same set of required sections.
+
+**Sizing guidance:** Keep each section ≤ 500 tokens. If an artifact exceeds this, split by sub-domain.
