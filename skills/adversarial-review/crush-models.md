@@ -44,7 +44,8 @@ REVIEW_EOF
 Where `{preamble}` is:
 ```
 You are Adversarial-r{slot}. Apply the 7-attack protocol to the plan below.
-Write your report to .adversarial/reports/review-{date}-iter{iteration}-{plan-slug}.md
+Write your report to .adversarial/reports/review-{date}-iter{iteration}-r{round}-{plan-slug}.md
+(round=1 for single-dispatch)
 Write state to .adversarial/{plan-slug}.json with fields:
   plan_slug, iteration (={next_iteration}), last_model, last_verdict, last_review_date.
 Schema: SCHEMAS.md §8. Verdict must be PASSED, CONDITIONAL, or FAILED.

@@ -63,7 +63,8 @@ esquisse/
 │   │   └── NEXT_STEPS.md        ← Current session state
 │   ├── specs/                    ← Feature design documents
 │   │   └── {date}-{feature}.md
-│   └── tasks/                    ← Granular task plans (P{n}-{nnn}-{slug}.md)
+│   ├── tasks/                    ← Granular task plans (P{n}-{nnn}-{slug}.md)
+│   └── artifacts/                ← Condensed external research (EsquissePlan-produced, gitignore-optional)
 │
 ├── scripts/
 │   ├── init.sh                   ← Bootstrap a new project
@@ -222,6 +223,15 @@ Code templates belong in `TEMPLATES.md`, not in SKILL.md.
 | `adversarial-review` skill | `skills/adversarial-review/` | Orchestrator skill |
 | `.adversarial/state.json` | project root (gitignored) | Rotation state |
 | Stop hook enforcement | `.github/hooks/hooks.json` | Blocks session on pending review |
+
+### AST Cache
+
+| Tool | Purpose | Invocation |
+|------|---------|------------|
+| `duckdb-code` skill | Structural codebase queries | Use skill by mentioning it |
+| `code_ast.duckdb` | AST cache (gitignored) | `duckdb code_ast.duckdb "LOAD sitting_duck; <SQL>"` |
+
+**`planning_context` table** (in `code_ast.duckdb`): Pinned symbol snapshots created by EsquissePlan (Step 2c). Queried by `implement-task` (Step 3b drift check, Step 4a orientation). Schema: `task_id`, `role`, `symbol_kind`, `symbol_name`, `file_path`, `line_start`, `line_end`, `signature`, `captured_at`. Macros: `capture_planning_context(task_id, role, pattern, name_like)` in `scripts/macros_go.sql`; `planning_drift(task_id)` in `scripts/macros.sql`.
 
 ---
 

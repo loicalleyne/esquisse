@@ -3,9 +3,48 @@
 ## Current Status
 
 - **Phase:** P2 — Robustness & Tooling
-- **Last updated:** 2026-04-19
+- **Last updated:** 2026-07-16
 
 ## Last Session
+
+**P2-013: AST Planning Context** — ✅ Done
+
+Added `planning_context` DuckDB table DDL and macros so EsquissePlan can capture
+symbol snapshots at planning time and implement-task can detect drift at
+implementation time.
+
+Changes:
+- `scripts/macros.sql` — `CREATE TABLE IF NOT EXISTS planning_context` (9 columns) + `planning_drift(task_id)` macro
+- `scripts/macros_go.sql` — `capture_planning_context(task_id, role, pattern, name_like)` TABLE macro
+- `.github/agents/EsquissePlan.agent.md` — Step 2c "Capture Planning Context" inserted after Step 2b
+- `skills/implement-task/SKILL.md` — Step 3b drift check + Step 4a orientation via planning_context
+- `AGENTS.md` — planning_context table documented in §Available Tools & Services
+- `SCHEMAS.md` — Planning Artifacts note in §4
+- `GLOSSARY.md` — 3 new terms: `planning_context`, `symbol snapshot`, `drift detection`
+
+Adversarial review: PASSED (iter 10).
+SpecReviewerAgent: ✅ COMPLIANT (all 11 acceptance grep checks passed).
+CodeQualityReviewerAgent: 1 Important issue fixed (empty `Step 4 — Orient` heading had no body — added transition sentence). 4 Minor issues deferred.
+
+## Previous Session
+
+**P2-012: Eliminate Bare python3 Calls from Bash Scripts** — ✅ Done
+
+Replaced all bare `python3 -c` invocations in `scripts/gate-review.sh` (2 calls)
+and `scripts/upgrade.sh` (4 calls) with `jq -r` expressions (reads) and `printf`
+heredoc (deprecation stub write). The `jq --arg` merge handles the `verdict →
+last_verdict` rename for the migration write. Grep/sed fallback preserved for
+environments without `jq`. Zero Python remains in either script.
+
+Adversarial review: PASSED (iter 1, Adversarial-r0 / GPT-4.1).
+Code quality: APPROVED (minor: dead `RAW_SLUG` variable is pre-existing).
+
+Key gotcha documented by CodeQualityReviewer: in the jq expression
+`del(.verdict) + {last_verdict: .verdict}`, both operands are evaluated against
+the **same original input** — `del` does not mutate for the purpose of the
+right-hand side. The expression is correct.
+
+## Previous Session
 
 Created the missing framework self-governance documents:
 - `AGENTS.md` — project constitution

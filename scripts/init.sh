@@ -68,6 +68,7 @@ echo ""
 echo "Directories:"
 
 create_dir "docs/tasks"
+create_dir "docs/artifacts"
 create_dir "docs/adr"
 create_dir "docs/planning"
 create_dir "skills"
@@ -134,9 +135,10 @@ TODO: Populate after first agent session.
 
 ## References
 
-- ONBOARDING.md
-- GLOSSARY.md
-- docs/planning/ROADMAP.md
+- [ONBOARDING.md](ONBOARDING.md)
+- [GLOSSARY.md](GLOSSARY.md)
+- [docs/planning/ROADMAP.md](docs/planning/ROADMAP.md)
+- [docs/planning/NEXT_STEPS.md](docs/planning/NEXT_STEPS.md)
 - llms.txt (if present)
 "
 
@@ -152,6 +154,7 @@ create_file "CRUSH.md" "# Crush Session Context — ${PROJECT_NAME}
 
 Before any response, read \`AGENTS.md\`. If \`ONBOARDING.md\` exists, read it.
 If \`GLOSSARY.md\` exists, use its vocabulary.
+If \`docs/planning/NEXT_STEPS.md\` exists, check it for current session state and blocked items.
 
 ## Tool Name Reference
 
@@ -177,9 +180,9 @@ reviewer in a child process:
 
 | Slot | Model string |
 |------|-------------|
-| 0 | \`openai/gpt-4.1\` |
-| 1 | \`anthropic/claude-opus-4-5-20251101\` |
-| 2 | \`openai/gpt-4o\` |
+| 0 | \`copilot/gpt-4.1\` |
+| 1 | \`gemini/gemini-2.5-pro\` |
+| 2 | \`copilot/gpt-4o\` |
 
 ## Gate Review (Planning Gate)
 
@@ -208,9 +211,11 @@ TODO: One paragraph. How do the major components fit together?
 
 ## Read Order
 
-1. AGENTS.md — constraints and commands
-2. This file — mental model and data flow
-3. docs/planning/ROADMAP.md — current phase and open tasks
+1. [AGENTS.md](AGENTS.md) — constraints and commands
+2. [ONBOARDING.md](ONBOARDING.md) — mental model and data flow (this file)
+3. [GLOSSARY.md](GLOSSARY.md) — canonical domain vocabulary
+4. [docs/planning/ROADMAP.md](docs/planning/ROADMAP.md) — current phase and open tasks
+5. [docs/planning/NEXT_STEPS.md](docs/planning/NEXT_STEPS.md) — session state and blocked items
 
 ## Data Flow
 
@@ -264,7 +269,7 @@ See \`docs/tasks/\` for individual task documents.
 TODO
 "
 
-create_file "NEXT_STEPS.md" "# NEXT_STEPS.md — ${PROJECT_NAME}
+create_file "docs/planning/NEXT_STEPS.md" "# NEXT_STEPS.md — ${PROJECT_NAME}
 
 ## Active Task
 

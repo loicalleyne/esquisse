@@ -84,23 +84,9 @@ fi
 BLOCKING=()
 
 for STATE_FILE in "${STATE_FILES[@]}"; do
-    if command -v python3 &>/dev/null; then
-        LAST_VERDICT="$(python3 -c "
-import json
-try:
-    d = json.load(open('$STATE_FILE'))
-    print(d.get('last_verdict', ''))
-except Exception:
-    print('')
-" 2>/dev/null || echo "")"
-        ITER="$(python3 -c "
-import json
-try:
-    d = json.load(open('$STATE_FILE'))
-    print(d.get('iteration', 0))
-except Exception:
-    print(0)
-" 2>/dev/null || echo "0")"
+    if command -v jq &>/dev/null; then
+        LAST_VERDICT="$(jq -r '.last_verdict // ""' "$STATE_FILE" 2>/dev/null || echo "")"
+        ITER="$(jq -r '.iteration // 0' "$STATE_FILE" 2>/dev/null || echo "0")"
     else
         LAST_VERDICT="$(grep -o '"last_verdict": *"[^"]*"' "$STATE_FILE" 2>/dev/null \
             | sed 's/.*"last_verdict": *"\([^"]*\)"/\1/' || echo "")"

@@ -60,14 +60,16 @@ AI agents fail not because of capability gaps but because of context gaps. An ag
 ```
 Read in order for a new task:
 
-1. AGENTS.md          ← Project constitution (architecture, build, conventions, gotchas)
-2. ONBOARDING.md      ← Orient: what to read first, load order, mental model
-3. GLOSSARY.md        ← Domain vocabulary (canonical names for types, concepts)
-4. llms.txt           ← Concise public API index
-5. llms-full.txt      ← Full API reference for implementation tasks
-6. docs/decisions/    ← WHY decisions were made (ADRs)
-7. docs/tasks/        ← WHAT to do next (task plans)
-8. skills/            ← HOW to work (reusable workflows)
+1. [`AGENTS.md`](AGENTS.md)                        ← Project constitution (architecture, build, conventions, gotchas)
+2. [`ONBOARDING.md`](ONBOARDING.md)                ← Orient: what to read first, load order, mental model
+3. [`GLOSSARY.md`](GLOSSARY.md)                    ← Domain vocabulary (canonical names for types, concepts)
+3.5. [`docs/planning/NEXT_STEPS.md`](docs/planning/NEXT_STEPS.md) ← Current session state (check at start, append at end)
+4. [`llms.txt`](llms.txt)                          ← Concise public API index
+5. [`llms-full.txt`](llms-full.txt)                ← Full API reference for implementation tasks
+6. [`docs/decisions/`](docs/decisions/)            ← WHY decisions were made (ADRs)
+7. [`docs/tasks/`](docs/tasks/)                    ← WHAT to do next (task plans)
+7.5. [`docs/artifacts/`](docs/artifacts/)          ← Condensed external research (load referenced artifacts only)
+8. [`skills/`](skills/)                            ← HOW to work (reusable workflows)
 ```
 
 **Rule:** If a model needs to ask a question that one of these files should answer, the file is incomplete. Fix the file, not the prompt.
@@ -92,6 +94,8 @@ project-root/
 │   │   └── ADR-{nnnn}-{slug}.md
 │   ├── tasks/                     # Granular task plans
 │   │   └── P{phase}-{nnn}-{slug}.md
+│   ├── artifacts/                 # Condensed external research (EsquissePlan-produced)
+│   │   └── {YYYY-MM-DD}-{slug}.md
 │   ├── planning/
 │   │   ├── ROADMAP.md             # Phase-level plan with status tracking
 │   │   └── NEXT_STEPS.md         # Current session state (updated after each work session)
@@ -570,6 +574,13 @@ When an agent begins a task, it should execute this protocol before writing any 
 1. Read AGENTS.md → internalize invariants and gotchas.
 2. Read GLOSSARY.md → confirm vocabulary for this domain area.
 3. Read the task doc (P{n}-{nnn}-{slug}.md) completely.
+3b. Load Planning Artifacts (if the task doc has a `## Planning Artifacts` section):
+    - For each listed artifact, read only the sections named in "What to read from it".
+    - If the artifact file is missing, note in Session Notes and do NOT reconstruct from training data.
+    - If no `## Planning Artifacts` section is present, skip this step entirely.
+    - The `> **Prerequisite:** Read \`...\`` blockquote at the top of the task doc is
+      the canonical shortcut to the artifact path. Use it when present; fall back to
+      the `## Planning Artifacts` table when the blockquote is absent.
 4. Read the "In Scope" and "Out of Scope" lists carefully.
 
 5. **Establish baseline.** Run the full test suite NOW, before touching any code.

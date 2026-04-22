@@ -241,3 +241,29 @@ CREATE OR REPLACE MACRO go_interface_impls(iface_name) AS TABLE
     FROM methods m
     JOIN iface_methods im ON m.name = im.method_name
     ORDER BY m.receiver, m.name;
+
+-- capture_planning_context: Capture AST symbol snapshots for a task into planning_context.
+-- Go-specific: uses read_ast() with sitting_duck. Excludes test files.
+-- Usage: INSERT INTO planning_context SELECT * FROM capture_planning_context('P2-013', 'modify', '**/*.go', 'ProcessConfig%');
+-- Note: column names (start_line, end_line, semantic_type, name, file_path, peek) and
+-- parameters (ignore_errors, peek) are verified against existing macros_go.sql usage in this project.
+-- Re-verify against sitting_duck docs if the extension is upgraded.
+CREATE OR REPLACE MACRO capture_planning_context(task_id, role, pattern, name_like) AS TABLE
+    SELECT
+        task_id::VARCHAR            AS task_id,
+        role::VARCHAR               AS role,
+        CASE
+            WHEN semantic_type = 'DEFINITION_FUNCTION' THEN 'function'
+            WHEN semantic_type = 'DEFINITION_CLASS'    THEN 'type'
+            ELSE 'file'
+        END                         AS symbol_kind,
+        name                        AS symbol_name,
+        file_path,
+        start_line                  AS line_start,
+        end_line                    AS line_end,
+        peek                        AS signature,
+        now()                       AS captured_at
+    FROM read_ast(pattern, ignore_errors := true, peek := 'full')
+    WHERE (semantic_type = 'DEFINITION_FUNCTION' OR semantic_type = 'DEFINITION_CLASS')
+      AND name ILIKE name_like
+      AND file_path NOT LIKE '%_test.go';

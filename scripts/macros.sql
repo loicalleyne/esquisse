@@ -411,3 +411,41 @@ CREATE OR REPLACE MACRO changed_function_summary(from_rev, to_rev, file_pattern,
       ON suffix(d.file_path, '/' || c.file_path) OR d.file_path = c.file_path
     LEFT JOIN metrics m ON d.file_path = m.file_path AND d.name = m.name
     ORDER BY COALESCE(m.cyclomatic, 0) DESC, d.file_path, d.start_line;
+
+-- =============================================================================
+-- planning_context: Pinned symbol snapshots for task planning.
+-- Populated by EsquissePlan (Step 2c) using capture_planning_context macro.
+-- Queried by implement-task (Step 3b drift check, Step 4a orientation).
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS planning_context (
+    task_id      VARCHAR NOT NULL,     -- e.g. 'P2-013'
+    role         VARCHAR NOT NULL,     -- 'modify' | 'implement' | 'depends-on' | 'must-not-touch'
+    symbol_kind  VARCHAR NOT NULL,     -- 'function' | 'type' | 'interface' | 'file'
+    symbol_name  VARCHAR NOT NULL,
+    file_path    VARCHAR NOT NULL,
+    line_start   INTEGER,
+    line_end     INTEGER,
+    signature    TEXT,                 -- captured via peek := 'full'
+    captured_at  TIMESTAMP DEFAULT now()
+);
+
+-- planning_drift: Detect line-start drift for symbols between planning and now.
+-- Requires: ast table in same DuckDB session (post rebuild-ast.sh).
+-- Usage: SELECT * FROM planning_drift('P2-013');
+CREATE OR REPLACE MACRO planning_drift(task_id) AS TABLE
+    SELECT
+        p.task_id,
+        p.symbol_name,
+        p.file_path,
+        p.line_start        AS planned_line,
+        a.start_line        AS current_line,
+        p.captured_at,
+        ABS(a.start_line - p.line_start) AS drift_lines
+    FROM planning_context p
+    JOIN ast a
+      ON  a.name      = p.symbol_name
+      AND a.file_path = p.file_path
+    WHERE p.task_id = task_id
+      AND p.line_start IS NOT NULL
+      AND a.start_line != p.line_start
+    ORDER BY drift_lines DESC;
