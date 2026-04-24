@@ -64,6 +64,11 @@ Gather the full plan to be reviewed. Prefer the most complete version:
    current phase (read `docs/planning/ROADMAP.md` to identify the current phase).
 3. If both exist, use both — session memory for high-level design, task docs
    for implementation details.
+4. Check `docs/artifacts/` — if Planning Artifact files exist that are
+   referenced by the plan (look for `## Planning Artifacts` sections in task
+   docs), include their paths in the dispatch instruction so the reviewer
+   can load them. Planning Artifacts are the ground-truth for Attack 7
+   (Hallucination Audit) on external API surfaces.
 
 ### Step 4b: Platform detection — choose dispatch method
 

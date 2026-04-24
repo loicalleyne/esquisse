@@ -415,6 +415,7 @@ for src in "${ESQUISSE_DIR}/skills"/*/; do
 done
 [ "$_vscode_skills_found" -eq 0 ] && echo "  INFO: no skill directories found in ${ESQUISSE_DIR}/skills/"
 
+# SYNC: same logic in install-crush.sh
 # Crush skills (user-level, with tool-name translation)
 CRUSH_SKILLS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/crush/skills"
 mkdir -p "$CRUSH_SKILLS_DIR"

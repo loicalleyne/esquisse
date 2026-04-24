@@ -212,7 +212,7 @@ CREATE OR REPLACE MACRO go_interfaces() AS TABLE
 --   SELECT * FROM go_interface_impls('Writer');
 CREATE OR REPLACE MACRO go_interface_impls(iface_name) AS TABLE
     WITH iface_methods AS (
-        SELECT m.name AS method_name, i.file_path AS iface_file
+        SELECT m.name AS method_name, ts.file_path AS iface_file
         FROM ast ts
         JOIN ast it
           ON it.parent_id = ts.node_id AND it.file_path = ts.file_path

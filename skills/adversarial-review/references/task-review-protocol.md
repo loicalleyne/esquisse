@@ -177,6 +177,22 @@ For each external dependency and each new component, ask:
 
 AI-generated plans invent things. Find the inventions.
 
+**Grounding check (Planning Artifacts):**
+- Does the task Specification cite any external library function, method, type,
+  or config key by name?
+- If yes: is there a `## Planning Artifacts` section in the task linking to a
+  `docs/artifacts/` file that was produced by EsquissePlan during planning?
+  - **Yes, artifact present:** treat the artifact as ground truth; verify
+    the Specification matches it.
+  - **No artifact, but claim is verifiable from in-repo source** (`go.mod`,
+    existing `*.go` files): verify against source. Flag discrepancies as Major.
+  - **No artifact and claim cannot be verified from repo source:** flag as
+    **Major** — "Unverified external API claim in Specification: no Planning
+    Artifact present. EsquissePlan must produce `docs/artifacts/` grounding
+    before implementation."
+- Do not accept "it's a well-known library" as grounding. Hallucinated
+  signatures are most common on well-known libraries.
+
 **Invented identifiers:**
 - Does the plan reference functions, methods, types, or constants by name?
   - Do those names actually exist in the codebase?

@@ -42,8 +42,8 @@ type adversarialInput struct {
 	ExcludeModel string `json:"exclude_model,omitempty" jsonschema:"Full model ID to exclude from review pool (e.g. copilot/claude-sonnet-4.6). Obtain from crush_info tool. Empty or omitted = no exclusion."`
 }
 
-func newAdversarialHandler(projectRoot string, prober *modelProber) func(context.Context, *mcp.CallToolRequest, adversarialInput) (*mcp.CallToolResult, any, error) {
-	staticPool := buildModelPool()
+func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallToolRequest, adversarialInput) (*mcp.CallToolResult, any, error) {
+	pool := buildModelPool()
 	return func(ctx context.Context, req *mcp.CallToolRequest, input adversarialInput) (*mcp.CallToolResult, any, error) {
 		if strings.TrimSpace(input.PlanContent) == "" {
 			return mcpErr("plan_content must not be empty")
@@ -51,12 +51,9 @@ func newAdversarialHandler(projectRoot string, prober *modelProber) func(context
 		if strings.TrimSpace(input.PlanSlug) == "" {
 			return mcpErr("plan_slug must not be empty")
 		}
-		if len(staticPool) == 0 {
-			return mcpErr("all model slots excluded by ESQUISSE_ALLOWED_PROVIDERS — set ESQUISSE_POOL_FALLBACK_STRICT=0 or allow at least one provider")
+		if len(pool) == 0 {
+			return mcpErr("ESQUISSE_MODELS produced an empty model pool; set ESQUISSE_MODELS to a comma-separated list of provider/model entries")
 		}
-		// Filter out models the prober has confirmed unavailable (e.g. "not supported
-		// via Responses API"). Fail-open: if no probe data exists yet, uses full pool.
-		pool := filterAvailableModels(staticPool, prober)
 		effectivePool := excludeModelFilter(pool, input.ExcludeModel)
 
 		state, err := ReadState(projectRoot, input.PlanSlug)

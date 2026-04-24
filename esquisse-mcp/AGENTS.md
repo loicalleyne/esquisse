@@ -20,11 +20,9 @@
 
 5. **stdio MCP server is single-threaded for tool handlers.** The MCP Go SDK in
    stdio transport processes one handler at a time. State files and `runCrushFn`
-   have no concurrent tool-handler access. However, `modelProber` runs a
-   background goroutine (`startProbe`) that writes shared cache state; all
-   reads/writes to `modelProber.cache` and `modelProber.probing` MUST go through
-   `modelProber.mu` (`sync.RWMutex`). If the server is ever ported to a
-   concurrent transport, a per-slug file lock is also required for state files.
+   have no concurrent tool-handler access. There are no background goroutines.
+   If the server is ever ported to a concurrent transport, a per-slug file lock
+   is required for state files.
 
 ---
 
@@ -38,9 +36,8 @@ working in Esquisse-managed projects:
   enterprise-policy fallback. Writes verdict to `.adversarial/{slug}.json`.
 - **`gate_review`** — reads all `.adversarial/*.json` files and returns
   `blocked=true` if any plan has a FAILED or missing verdict.
-- **`discover_models`** — lists available `provider/model` strings from
-  `crush models`, filtered by `ESQUISSE_ALLOWED_PROVIDERS` and an optional
-  caller-supplied substring.
+- **`write_planning_artifact`** — writes a Planning Artifact file to
+  `docs/artifacts/{date}-{slug}.md` per SCHEMAS.md §10.
 
 **Module:** `github.com/loicalleyne/esquisse-mcp`  
 **Go version:** 1.25+  
@@ -60,14 +57,11 @@ esquisse-mcp/
 ├── main.go                 ← Entry point: --project-root flag, server startup
 ├── tools.go                ← Tool registration (mcp.AddTool)
 ├── adversarial.go          ← adversarial_review handler, adversarialInput, newAdversarialHandler
-├── models.go               ← Model pool + availability cache:
-│                              buildModelPool, familyInterleaveShuffle,
-│                              buildRotationOrder, runOneRound, isModelUnavailable,
-│                              worstVerdict, effectiveRounds, newDiscoverHandler;
-│                              ModelEntry, ModelCache, modelProber,
-│                              newModelProber, newModelProberWithFuncs,
-│                              startProbe, currentState, forceRefresh,
-│                              loadCache, saveCache, defaultCachePath, defaultProbeTTL
+├── models.go               ← Model pool management:
+│                              buildModelPool (reads ESQUISSE_MODELS env var),
+│                              familyInterleaveShuffle, buildRotationOrder,
+│                              runOneRound, isModelUnavailable, worstVerdict,
+│                              effectiveRounds, excludeModelFilter, providerOf
 ├── runner.go               ← RunCrush, RunResult — crush subprocess management
 ├── gate.go                 ← gate_review handler, gateInput, gateOutput
 ├── state.go                ← ReadState, WriteState, ReviewState, validateSlug
@@ -104,7 +98,7 @@ go install .
 | Dependency | Role | Notes |
 |---|---|---|
 | `github.com/modelcontextprotocol/go-sdk v1.5.0` | MCP server SDK | Supports stdio transport only — do not bypass with raw HTTP |
-| `crush` (external binary) | LLM runner | Must be in PATH; used by `RunCrush` and `newDiscoverHandler` |
+| `crush` (external binary) | LLM runner | Must be in PATH; used by `RunCrush` |
 
 ---
 
@@ -115,7 +109,7 @@ go install .
 - **Logging:** `log.Printf` for warnings and operational events. Use `%q` when logging any value derived from env vars or user input to prevent log injection.
 - **Temp files:** Always `os.CreateTemp(tmpDir, "round-*.txt")` with mode 0600. Never construct temp file paths manually. Always delete temp files before returning from `runOneRound`.
 - **`ExcludeModel` is per-call, not per-server.** The base pool is built once in the `newAdversarialHandler` closure (`buildModelPool()`). `excludeModelFilter` is called inside the handler on every request with `input.ExcludeModel`. Never move `excludeModelFilter` to the closure-construction time.
-- **Context:** Pass `ctx` through all subprocess calls. Use `context.WithTimeout` for sub-operations (`discover_models` uses a 10s sub-context; `adversarial_review` uses a 300s top-level context).
+- **Context:** Pass `ctx` through all subprocess calls. Use `context.WithTimeout` for sub-operations (`adversarial_review` uses a 300s top-level context).
 - **Tests:** Use `t.Setenv()` for env var tests. Restore `runCrushFn` with `defer func() { runCrushFn = orig }()`. Do NOT call `t.Parallel()` in tests that call `SetRandSource` (global state mutation).
 
 ---
@@ -124,10 +118,7 @@ go install .
 
 | Variable | Default | Description |
 |---|---|---|
-| `ESQUISSE_MODEL_SLOT0`–`ESQUISSE_MODEL_SLOT4` | defaults in `models.go` | Override pool slot. Format: `provider/model`. Invalid format → warning + default. |
-| `ESQUISSE_ALLOWED_PROVIDERS` | `""` (all allowed) | Comma-separated provider IDs (case-sensitive). Filters pool at startup. |
-| `ESQUISSE_POOL_FALLBACK_STRICT` | `""` (fail-open) | Set `"1"` to error instead of falling back to full default pool when all slots filtered. |
-| `ESQUISSE_MODEL_CACHE_TTL_DAYS` | `"3"` (3 days) | Availability cache TTL in days. Set to `"0"` to disable disk cache (in-memory only). |
+| `ESQUISSE_MODELS` | `""` (use defaults in `models.go`) | Comma-separated `provider/model` list. Overrides the entire pool. Invalid entries are skipped with a log warning; all-invalid falls back to `defaultModels`. |
 
 ---
 
@@ -143,9 +134,9 @@ go install .
 
 ## Common Mistakes to Avoid
 
-1. **Calling `t.Parallel()` in tests that call `SetRandSource`.**
+1. **Calling `t.Parallel()` in tests that call `SetRandSource` or mutate `runCrushFn`.**
    - Wrong: `t.Parallel()` + `SetRandSource(rand.NewSource(42))` in the same test
-   - Right: omit `t.Parallel()` from any test that mutates `runCrushFn` or the rng factory
+   - Right: omit `t.Parallel()`; restore with `defer SetRandSource(nil)` or `defer func() { runCrushFn = orig }()`
    - Why: these are package-level variables; concurrent writes cause data races.
 
 2. **Passing plan content as a CLI argument.**
@@ -166,6 +157,11 @@ go install .
    - Right: `pool := buildModelPool()` inside `newAdversarialHandler`, captured in closure
    - Why: `buildModelPool` reads `os.Getenv` — a package-level call runs at `init` time, before the process environment is fully configured in some hosting scenarios.
 
+6. **Setting `ESQUISSE_MODEL_SLOT{0-4}` or `ESQUISSE_ALLOWED_PROVIDERS` in crush.json.**
+   - These env vars were removed in P3-006. Use `ESQUISSE_MODELS` instead.
+   - Wrong: `"ESQUISSE_MODEL_SLOT0": "copilot/claude-sonnet-4.6"`
+   - Right: `"ESQUISSE_MODELS": "copilot/claude-sonnet-4.6,copilot/gpt-4.1,gemini/gemini-2.0-flash"`
+
 ---
 
 ## References
@@ -176,3 +172,4 @@ go install .
 - [../AGENTS.md](../AGENTS.md) — parent esquisse project constitution
 - [../docs/tasks/P1-004-esquisse-mcp-server.md](../docs/tasks/P1-004-esquisse-mcp-server.md) — original implementation task
 - [../docs/tasks/P2-006-mcp-configurable-model-rotation.md](../docs/tasks/P2-006-mcp-configurable-model-rotation.md) — model pool + multi-round task
+- [../docs/tasks/P3-006-mcp-env-model-pool.md](../docs/tasks/P3-006-mcp-env-model-pool.md) — replaced probing with ESQUISSE_MODELS env var

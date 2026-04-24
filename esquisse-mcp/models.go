@@ -3,26 +3,19 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
-	defaultRounds = 5
+	defaultRounds = 1
 	maxRounds     = 50
 )
 
@@ -77,7 +70,7 @@ func excludeModelFilter(pool []string, exclude string) []string {
 // errAllModelsUnavailable is returned when every model in the pool is blocked.
 var errAllModelsUnavailable = errors.New("all models in the pool are unavailable " +
 	"(enterprise policy may be blocking them); " +
-	"check ESQUISSE_ALLOWED_PROVIDERS or run discover_models to verify pool availability")
+	"set ESQUISSE_MODELS to a list of models known to be accessible")
 
 // modelUnavailablePatterns are case-insensitive substrings that indicate a model
 // is blocked by enterprise policy rather than a transient error.
@@ -125,66 +118,35 @@ func effectiveRounds(n int) int {
 	return n
 }
 
-// buildModelPool constructs the effective model pool from env vars + defaults.
-// Does not invoke any external binary.
+// buildModelPool returns the model pool from ESQUISSE_MODELS env var.
+// Falls back to defaultModels if the var is unset or all entries are invalid.
 func buildModelPool() []string {
-	const slots = 5
-	// Step 1: build base slice from slot env vars with validation.
-	base := make([]string, slots)
-	for i := 0; i < slots; i++ {
-		envKey := fmt.Sprintf("ESQUISSE_MODEL_SLOT%d", i)
-		v := os.Getenv(envKey)
-		if v == "" {
-			base[i] = defaultModels[i]
-			continue
-		}
-		// Validate: exactly one "/" with non-empty parts on both sides.
-		parts := strings.SplitN(v, "/", 2)
-		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			log.Printf("esquisse-mcp: ESQUISSE_MODEL_SLOT%d=%q is invalid, using default", i, v)
-			base[i] = defaultModels[i]
-			continue
-		}
-		base[i] = v
-	}
-
-	// Step 2: parse ESQUISSE_ALLOWED_PROVIDERS.
-	allowedRaw := os.Getenv("ESQUISSE_ALLOWED_PROVIDERS")
-	if allowedRaw == "" {
-		return base
-	}
-	allowedSet := make(map[string]bool)
-	for _, p := range strings.Split(allowedRaw, ",") {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			allowedSet[p] = true
-		}
-	}
-	if len(allowedSet) == 0 {
-		return base
-	}
-
-	// Step 3: filter by allowed providers.
-	filtered := make([]string, 0, len(base))
-	for _, m := range base {
-		provider := providerOf(m)
-		if allowedSet[provider] {
-			filtered = append(filtered, m)
-		} else {
-			log.Printf("esquisse-mcp: model %q excluded by ESQUISSE_ALLOWED_PROVIDERS", m)
-		}
-	}
-
-	// Step 4: handle empty result.
-	if len(filtered) == 0 {
-		if os.Getenv("ESQUISSE_POOL_FALLBACK_STRICT") == "1" {
-			return nil
-		}
-		log.Printf("esquisse-mcp: all models filtered by ESQUISSE_ALLOWED_PROVIDERS; falling back to default pool (set ESQUISSE_POOL_FALLBACK_STRICT=1 to prevent this)")
+	raw := os.Getenv("ESQUISSE_MODELS")
+	if raw == "" {
 		return append([]string(nil), defaultModels...)
 	}
-
-	return filtered
+	var pool []string
+	for _, m := range strings.Split(raw, ",") {
+		m = strings.TrimSpace(m)
+		if m == "" {
+			continue
+		}
+		if !validModelRe.MatchString(m) {
+			log.Printf("esquisse-mcp: ESQUISSE_MODELS entry %q contains invalid characters, skipping", m)
+			continue
+		}
+		parts := strings.SplitN(m, "/", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			log.Printf("esquisse-mcp: ESQUISSE_MODELS entry %q must be provider/model, skipping", m)
+			continue
+		}
+		pool = append(pool, m)
+	}
+	if len(pool) == 0 {
+		log.Printf("esquisse-mcp: ESQUISSE_MODELS produced no valid entries, falling back to defaults")
+		return append([]string(nil), defaultModels...)
+	}
+	return pool
 }
 
 // providerOf extracts the provider prefix (before the first "/") from a model string.
@@ -304,37 +266,6 @@ func worstVerdict(verdicts []string) string {
 	return worst
 }
 
-// filterAvailableModels returns pool with any models the prober has confirmed
-// unavailable removed. Fail-open: if the prober has no data or all models would
-// be removed, returns pool unchanged.
-func filterAvailableModels(pool []string, prober *modelProber) []string {
-	if prober == nil {
-		return pool
-	}
-	entries, _, _, _ := prober.currentState()
-	if len(entries) == 0 {
-		return pool
-	}
-	avail := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		avail[e.ID] = e.Available
-	}
-	filtered := make([]string, 0, len(pool))
-	for _, m := range pool {
-		av, known := avail[m]
-		if !known || av {
-			filtered = append(filtered, m)
-		} else {
-			log.Printf("esquisse-mcp: model %q excluded by probe cache (marked unavailable)", m)
-		}
-	}
-	if len(filtered) == 0 {
-		log.Printf("esquisse-mcp: probe cache would empty pool; using full pool (fail-open)")
-		return pool
-	}
-	return filtered
-}
-
 // isModelUnavailable reports whether the crush output indicates the model is
 // blocked by enterprise policy.
 func isModelUnavailable(output string) bool {
@@ -413,408 +344,4 @@ func runOneRound(ctx context.Context, pool []string, targetModel, preamble, plan
 
 	_ = os.Remove(tmpName)
 	return "", "", errAllModelsUnavailable
-}
-
-// discoverInput is the input schema for the discover_models tool.
-type discoverInput struct {
-	Filter       string `json:"filter,omitempty" jsonschema:"Optional substring filter for model names (max 200 chars)"`
-	ForceRefresh bool   `json:"force_refresh,omitempty" jsonschema:"Set to true to clear the cache and trigger a new background probe"`
-}
-
-// newDiscoverHandler returns an MCP handler that lists available crush models.
-func newDiscoverHandler(prober *modelProber) func(context.Context, *mcp.CallToolRequest, discoverInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, input discoverInput) (*mcp.CallToolResult, any, error) {
-		if len(input.Filter) > 200 {
-			return mcpErr("filter must not exceed 200 characters")
-		}
-
-		if input.ForceRefresh {
-			prober.forceRefresh(ctx)
-		} else {
-			// If cache is missing or corrupt but not probing, start probe.
-			_, probing, _, _ := prober.currentState()
-			if !probing {
-				prober.startProbe(ctx)
-			}
-		}
-
-		entries, probing, stale, cachedAt := prober.currentState()
-
-		var models []ModelEntry
-
-		// Apply ESQUISSE_ALLOWED_PROVIDERS filter (same logic as buildModelPool).
-		allowedRaw := os.Getenv("ESQUISSE_ALLOWED_PROVIDERS")
-		var allowedSet map[string]bool
-		if allowedRaw != "" {
-			allowedSet = make(map[string]bool)
-			for _, p := range strings.Split(allowedRaw, ",") {
-				p = strings.TrimSpace(p)
-				if p != "" {
-					allowedSet[p] = true
-				}
-			}
-		}
-
-		var lowerFilter string
-		if input.Filter != "" {
-			lowerFilter = strings.ToLower(input.Filter)
-		}
-
-		for _, m := range entries {
-			// Apply allowed providers
-			if allowedSet != nil && len(allowedSet) > 0 && !allowedSet[m.Provider] {
-				continue
-			}
-			// Apply user filter
-			if lowerFilter != "" && !strings.Contains(strings.ToLower(m.ID), lowerFilter) {
-				continue
-			}
-			models = append(models, m)
-		}
-
-		if models == nil {
-			models = []ModelEntry{} // ensure JSON array instead of null
-		}
-
-		cachedAtStr := ""
-		if !cachedAt.IsZero() {
-			cachedAtStr = cachedAt.Format(time.RFC3339)
-		}
-
-		resp := map[string]interface{}{
-			"models":    models,
-			"cached_at": cachedAtStr,
-			"stale":     stale,
-			"probing":   probing,
-		}
-
-		respBytes, err := json.Marshal(resp)
-		if err != nil {
-			return mcpErr("failed to encode discover_models response: %v", err)
-		}
-
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: string(respBytes)}},
-		}, nil, nil
-	}
-}
-
-// ModelEntry represents one probed model in the availability cache.
-type ModelEntry struct {
-	ID        string    `json:"id"`
-	Provider  string    `json:"provider"`
-	Available bool      `json:"available"`
-	ProbedAt  time.Time `json:"probed_at"`
-}
-
-// ModelCache is the JSON schema for ~/.config/esquisse-mcp/model-cache.json.
-type ModelCache struct {
-	Entries        []ModelEntry `json:"entries"`
-	CachedAt       time.Time    `json:"cached_at"`
-	ProbeCompleted bool         `json:"probe_completed"`
-}
-
-// modelProber manages the background probe goroutine and disk cache.
-// All exported-accessible state is protected by mu.
-// Holds injectable listModelsFn and probeFn for test substitution.
-type modelProber struct {
-	mu          sync.RWMutex
-	cache       *ModelCache
-	probing     bool
-	cancelProbe context.CancelFunc
-	done        chan struct{} // closed when current probe completes
-	cachePath   string
-	ttl         time.Duration
-	// Injectable for testing — set via newModelProberWithFuncs.
-	listModelsFn func(ctx context.Context) ([]string, error)
-	probeFn      func(ctx context.Context, model string) bool
-}
-
-func defaultCachePath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "esquisse-mcp", "model-cache.json"), nil
-}
-
-func defaultProbeTTL() time.Duration {
-	envVal := os.Getenv("ESQUISSE_MODEL_CACHE_TTL_DAYS")
-	if envVal != "" {
-		days, err := strconv.Atoi(envVal)
-		if err != nil || days <= 0 {
-			log.Printf("esquisse-mcp: invalid ESQUISSE_MODEL_CACHE_TTL_DAYS=%q, using default (3)", envVal)
-		} else {
-			return time.Duration(days) * 24 * time.Hour
-		}
-	}
-	return 3 * 24 * time.Hour
-}
-
-func newModelProber(cachePath string, ttl time.Duration) *modelProber {
-	return newModelProberWithFuncs(cachePath, ttl, func(ctx context.Context) ([]string, error) {
-		crushPath, err := exec.LookPath("crush")
-		if err != nil {
-			return nil, fmt.Errorf("crush not in PATH: %w", err)
-		}
-		cmd := exec.CommandContext(ctx, crushPath, "models")
-		out, err := cmd.Output()
-		if err != nil {
-			return nil, fmt.Errorf("crush models failed: %w", err)
-		}
-		var models []string
-		for _, line := range strings.Split(string(out), "\n") {
-			line = strings.TrimSpace(line)
-			if !strings.Contains(line, "/") {
-				continue
-			}
-			models = append(models, line)
-		}
-		return models, nil
-	}, func(ctx context.Context, model string) bool {
-		// Use a minimal non-empty prompt so crush actually calls the model API.
-		// An empty prompt (/dev/null) causes crush to exit 0 without making an API
-		// request, so enterprise policy blocks (e.g. "not supported via Responses API")
-		// are never surfaced and the model is incorrectly marked available.
-		tmp, err := os.CreateTemp("", "esquisse-probe-*.txt")
-		if err != nil {
-			log.Printf("esquisse-mcp: probe: failed to create temp file for model %q: %v", model, err)
-			return true // fail-open
-		}
-		tmpName := tmp.Name()
-		defer os.Remove(tmpName)
-		if _, err := fmt.Fprint(tmp, "Reply with the single word: OK"); err != nil {
-			_ = tmp.Close()
-			log.Printf("esquisse-mcp: probe: failed to write temp file for model %q: %v", model, err)
-			return true // fail-open
-		}
-		if err := tmp.Close(); err != nil {
-			log.Printf("esquisse-mcp: probe: failed to close temp file for model %q: %v", model, err)
-			return true // fail-open
-		}
-
-		res, err := runCrushFn(ctx, model, tmpName)
-		if err != nil {
-			return false
-		}
-		if res.ExitCode == 0 {
-			return true
-		}
-		if isModelUnavailable(res.Output) {
-			return false
-		}
-		return true // transient error — fail-open
-	})
-}
-
-func newModelProberWithFuncs(cachePath string, ttl time.Duration, listModelsFn func(context.Context) ([]string, error), probeFn func(context.Context, string) bool) *modelProber {
-	p := &modelProber{
-		cachePath:    cachePath,
-		ttl:          ttl,
-		listModelsFn: listModelsFn,
-		probeFn:      probeFn,
-	}
-	if cachePath == "" {
-		log.Printf("esquisse-mcp: running without model-cache.json (UserConfigDir failed)")
-	} else {
-		err := p.loadCache()
-		if err != nil {
-			log.Printf("esquisse-mcp: failed to load cache: %v", err)
-		}
-	}
-	return p
-}
-
-func (p *modelProber) loadCache() error {
-	if p.cachePath == "" {
-		return nil
-	}
-	data, err := os.ReadFile(p.cachePath)
-	if err != nil {
-		return err
-	}
-	var cache ModelCache
-	if err := json.Unmarshal(data, &cache); err != nil {
-		return err
-	}
-	// Drop invalid IDs
-	validEntries := make([]ModelEntry, 0, len(cache.Entries))
-	for _, e := range cache.Entries {
-		if validModelRe.MatchString(e.ID) {
-			validEntries = append(validEntries, e)
-		} else {
-			log.Printf("esquisse-mcp: invalid model ID in cache: %q, dropping", e.ID)
-		}
-	}
-	cache.Entries = validEntries
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.cache = &cache
-	return nil
-}
-
-func (p *modelProber) saveCache() {
-	if p.cachePath == "" {
-		return
-	}
-	p.mu.RLock()
-	cache := p.cache
-	p.mu.RUnlock()
-
-	if cache == nil {
-		return
-	}
-
-	data, err := json.Marshal(cache)
-	if err != nil {
-		log.Printf("esquisse-mcp: failed to encode cache: %v", err)
-		return
-	}
-
-	dir := filepath.Dir(p.cachePath)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		log.Printf("esquisse-mcp: failed to create cache dir %q: %v", dir, err)
-		return
-	}
-
-	tmp, err := os.CreateTemp(dir, "model-cache-*.json")
-	if err != nil {
-		log.Printf("esquisse-mcp: failed to create cache temp file: %v", err)
-		return
-	}
-	tmpName := tmp.Name()
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		log.Printf("esquisse-mcp: failed to chmod cache temp file: %v", err)
-		return
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		log.Printf("esquisse-mcp: failed to write cache temp file: %v", err)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		log.Printf("esquisse-mcp: failed to close cache temp file: %v", err)
-		return
-	}
-	if err := os.Rename(tmpName, p.cachePath); err != nil {
-		_ = os.Remove(tmpName)
-		log.Printf("esquisse-mcp: failed to rename cache temp file: %v", err)
-	}
-}
-
-func (p *modelProber) startProbe(ctx context.Context) {
-	p.mu.Lock()
-	if p.probing {
-		p.mu.Unlock()
-		return
-	}
-	p.probing = true
-	p.done = make(chan struct{})
-	probeCtx, cancel := context.WithCancel(ctx)
-	p.cancelProbe = cancel
-	p.mu.Unlock()
-
-	go func() {
-		defer func() {
-			p.mu.Lock()
-			p.probing = false
-			close(p.done)
-			p.mu.Unlock()
-			cancel()
-		}()
-
-		listCtx, cancelList := context.WithTimeout(probeCtx, 10*time.Second)
-		defer cancelList()
-		models, err := p.listModelsFn(listCtx)
-		if err != nil {
-			log.Printf("esquisse-mcp: failed to list models for probe: %v", err)
-			return
-		}
-
-		now := time.Now().UTC()
-		entries := make([]ModelEntry, len(models))
-		for i, m := range models {
-			entries[i] = ModelEntry{
-				ID:        m,
-				Provider:  providerOf(m),
-				Available: true,
-				ProbedAt:  now,
-			}
-		}
-
-		p.mu.Lock()
-		p.cache = &ModelCache{
-			Entries:  entries,
-			CachedAt: now,
-		}
-		p.mu.Unlock()
-
-		for i, m := range models {
-			select {
-			case <-probeCtx.Done():
-				return
-			default:
-			}
-
-			modelCtx, cancelModel := context.WithTimeout(probeCtx, 15*time.Second)
-			avail := p.probeFn(modelCtx, m)
-			cancelModel()
-
-			p.mu.Lock()
-			if p.cache != nil && len(p.cache.Entries) > i {
-				p.cache.Entries[i].Available = avail
-				p.cache.Entries[i].ProbedAt = time.Now().UTC()
-			}
-			p.mu.Unlock()
-		}
-
-		p.mu.Lock()
-		if p.cache != nil {
-			p.cache.ProbeCompleted = true
-			p.cache.CachedAt = time.Now().UTC()
-		}
-		p.mu.Unlock()
-
-		p.saveCache()
-	}()
-}
-
-func (p *modelProber) currentState() ([]ModelEntry, bool, bool, time.Time) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	var entries []ModelEntry
-	var stale bool
-	var cachedAt time.Time
-
-	if p.cache != nil {
-		entries = p.cache.Entries
-		cachedAt = p.cache.CachedAt
-		stale = time.Since(cachedAt) > p.ttl
-	}
-
-	return entries, p.probing, stale, cachedAt
-}
-
-func (p *modelProber) forceRefresh(ctx context.Context) {
-	p.mu.Lock()
-	if p.probing && p.cancelProbe != nil {
-		p.cancelProbe()
-	}
-	p.cache = nil
-	p.mu.Unlock()
-
-	p.mu.RLock()
-	d := p.done
-	p.mu.RUnlock()
-	if d != nil {
-		<-d
-	}
-
-	p.startProbe(ctx)
 }

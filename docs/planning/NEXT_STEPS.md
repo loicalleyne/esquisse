@@ -3,9 +3,45 @@
 ## Current Status
 
 - **Phase:** P2 — Robustness & Tooling
-- **Last updated:** 2026-04-22
+- **Last updated:** 2026-04-23
 
 ## Last Session
+
+**P2-014: install-crush.sh — Crush Integration Installer** — ✅ Done (2026-04-23)
+
+Created `scripts/install-crush.sh` — auto-detects crush.json, merges mcp.esquisse
+entry non-destructively via `jq --arg`, copies Esquisse skills, idempotent, supports
+Termux on Android. Added `# SYNC: same logic in install-crush.sh` comment to init.sh.
+
+Files changed:
+- `scripts/install-crush.sh` — new installer script (executable)
+- `scripts/init.sh` — SYNC comment added above Crush skills copy block
+
+All 8 acceptance criteria passed (AC1–AC7, AC9). 7-round adversarial review cycle
+before implementation: PASSED (Adversarial-r1, iter 7).
+
+## Previous Session
+
+**P3-006: Replace Model Probing with ESQUISSE_MODELS Env Var** — ✅ Done (2026-04-23)
+
+Removed all model-probing and background-cache machinery from `esquisse-mcp`.
+Replaced the 5-slot `ESQUISSE_MODEL_SLOT{0-4}` pool with a single `ESQUISSE_MODELS`
+comma-separated env var. Background goroutines, disk cache, and `discover_models`
+tool all removed. 5 rounds of adversarial review before implementation (3× FAILED,
+1× PASSED, 1× PASSED with minor notes). 
+
+Changes:
+- `esquisse-mcp/models.go` — removed probing machinery; new `buildModelPool()` reads `ESQUISSE_MODELS`
+- `esquisse-mcp/adversarial.go` — dropped `prober` param; removed `filterAvailableModels` call
+- `esquisse-mcp/tools.go` — dropped `prober` param; removed `discover_models` tool
+- `esquisse-mcp/main.go` — removed `--probe` flag, `runProbeAndExit`, `firstNonEmptyLine`, prober wiring
+- `esquisse-mcp/models_test.go` — replaced prober tests with `TestBuildModelPool_EnvVar` (7 sub-tests)
+
+Quality notes (non-blocking):
+- `defaultModels` contains `gemini/gemini-3.1-pro-preview` / `vertexai/gemini-3.1-pro-preview` — these model IDs may not be valid; overrideable via `ESQUISSE_MODELS`
+- `TestBuildRotationOrder_TwoSeedsDiffer` should `defer SetRandSource(nil)` to prevent test contamination
+
+## Previous Session
 
 **P2-013: AST Planning Context** — ✅ Done
 

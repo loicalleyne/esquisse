@@ -60,6 +60,7 @@ correctly in both VS Code Copilot Chat and Crush.
 | [P2-011-prerequisite-injection-mcp](../tasks/P2-011-prerequisite-injection-mcp.md) | ⬜ Ready | `write_planning_artifact` injects blockquote into referenced task files; extends output |
 | [P2-012-eliminate-bare-python-in-scripts](../tasks/P2-012-eliminate-bare-python-in-scripts.md) | ✅ Done | Replace bare `python3` JSON calls in gate-review.sh and upgrade.sh with `jq` + grep/sed fallback |
 | [P2-013-ast-planning-context](../tasks/P2-013-ast-planning-context.md) | ✅ Done | `planning_context` DDL + macros; EsquissePlan Step 2c; implement-task drift check + orientation |
+| [P2-014-install-crush-sh](../tasks/P2-014-install-crush-sh.md) | ✅ Done | `scripts/install-crush.sh` — auto-detect crush.json, jq-merge mcp.esquisse entry, copy skills; works on Termux |
 
 ---
 
@@ -75,6 +76,7 @@ conventions. Caller-model exclusion for adversarial reviews.
 | P3-003-upgrade-sh | ⬜ Not Started | `scripts/upgrade.sh` idempotent upgrade for adopted projects |
 | P3-004-adr-library | ⬜ Not Started | Seed `docs/adr/` with foundational ADRs for Esquisse design decisions |
 | [P3-005-mcp-model-availability-cache](../tasks/P3-005-mcp-model-availability-cache.md) | ✅ Done | Background availability-probe goroutine + disk cache for `discover_models`; structured JSON response with `available`, `probing`, `stale`; `force_refresh` param; `ESQUISSE_MODEL_CACHE_TTL_DAYS` |
+| [P3-006-mcp-env-model-pool](../tasks/P3-006-mcp-env-model-pool.md) | ✅ Done | Remove broken model-probing machinery; replace with `ESQUISSE_MODELS` comma-separated env var; drop `discover_models` tool |
 
 ---
 

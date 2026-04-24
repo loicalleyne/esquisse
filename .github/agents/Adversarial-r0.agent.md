@@ -9,7 +9,7 @@ description: >
   the adversarial-review skill.
 target: vscode
 user-invocable: false
-model: ['GPT-4.1 (copilot)', 'GPT-4o (copilot)', 'Claude Opus 4.6 (copilot)']
+model: ['GPT-4.1 (copilot)', 'Claude Sonnet 4.6 (copilot)', 'Auto (copilot)']
 tools:
   - read
   - search
@@ -39,6 +39,11 @@ Read the following before starting:
 - `skills/adversarial-review/references/report-template.md` — the report
   format to use.
 - `AGENTS.md` — project invariants. Any violation is a Critical issue.
+- `docs/artifacts/` — if any Planning Artifact files exist, read those
+  referenced by the plan under review. They are the ground-truth source for
+  external library API surfaces. Use them to validate Attack 7 claims.
+  **If a task Specification cites an external API and no Planning Artifact
+  covers it, flag it as Major under Attack 7** — the claim is unverified.
 
 The plan slug and state file path have been provided in the dispatch instruction
 (e.g. `.adversarial/P8-002-pipeline.json`). Read that file if it exists.
