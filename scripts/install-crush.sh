@@ -152,7 +152,7 @@ else
 fi
 
 # Skills copy
-# SYNC: same logic in init.sh
+# SYNC: same logic in init.sh and upgrade-crush.sh
 CRUSH_SKILLS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/crush/skills"
 if [[ "$DRY_RUN" == false ]]; then
     mkdir -p "$CRUSH_SKILLS_DIR"

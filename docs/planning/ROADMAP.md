@@ -78,6 +78,7 @@ conventions. Caller-model exclusion for adversarial reviews.
 | P3-004-adr-library | ⬜ Not Started | Seed `docs/adr/` with foundational ADRs for Esquisse design decisions |
 | [P3-005-mcp-model-availability-cache](../tasks/P3-005-mcp-model-availability-cache.md) | ✅ Done | Background availability-probe goroutine + disk cache for `discover_models`; structured JSON response with `available`, `probing`, `stale`; `force_refresh` param; `ESQUISSE_MODEL_CACHE_TTL_DAYS` |
 | [P3-006-mcp-env-model-pool](../tasks/P3-006-mcp-env-model-pool.md) | ✅ Done | Remove broken model-probing machinery; replace with `ESQUISSE_MODELS` comma-separated env var; drop `discover_models` tool |
+| [P3-007-upgrade-crush-sh](../tasks/P3-007-upgrade-crush-sh.md) | ✅ Done | `scripts/upgrade-crush.sh` — sync Esquisse skills and hooks to global Crush config |
 
 ---
 

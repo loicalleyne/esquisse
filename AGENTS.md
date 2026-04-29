@@ -72,6 +72,8 @@ esquisse/
 │   ├── gate-check.sh             ← Phase gate validation
 │   ├── gate-review.sh            ← Adversarial review enforcement hook (VS Code Stop)
 │   ├── upgrade.sh                ← Idempotent upgrade for adopted projects
+│   ├── install-crush.sh          ← First-time Crush integration setup (skills, hooks, crush.json, MCP binary)
+│   ├── upgrade-crush.sh          ← sync skills/hooks to ~/.config/crush/ (no crush.json changes)
 │   ├── rebuild-ast.sh            ← Rebuild DuckDB AST cache
 │   ├── macros.sql                ← Universal DuckDB/sitting_duck AST macros
 │   ├── macros_go.sql             ← Go-specific AST macros
