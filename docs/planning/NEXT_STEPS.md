@@ -7,6 +7,29 @@
 
 ## Last Session
 
+**P3-007: upgrade-crush.sh — Crush Skills/Hooks Sync** — ✅ Done (2026-04-29)
+
+Created `scripts/upgrade-crush.sh` — idempotent jq-free script that syncs Esquisse
+skills and hooks to the global Crush config directory, without touching crush.json or
+the MCP binary. 4-round adversarial review cycle (3× FAILED, 1× PASSED at iter3).
+
+Files changed:
+- `scripts/upgrade-crush.sh` — new 148-line script (created, executable)
+- `scripts/install-crush.sh` — SYNC comment updated to reference `upgrade-crush.sh`
+- `AGENTS.md` — `upgrade-crush.sh` added to layout tree
+- `docs/planning/ROADMAP.md` — P3-007 row marked ✅ Done
+
+Key implementation notes:
+- `CRUSH_SKILLS_DIR`, `CRUSH_HOOKS_DIR`, and `CRUSH_CONFIG_DIR` all respect pre-set env vars
+- Two-phase cp→mv atomic pattern matches install-crush.sh
+- `chmod +x` on hook has explicit error handler
+- Summary block gated by `DRY_RUN == false`
+- Skill count uses array length `${#_skills[@]}` (not arithmetic with `|| true` mask)
+
+All 10 acceptance criteria passed.
+
+## Previous Session
+
 **P2-014: install-crush.sh — Crush Integration Installer** — ✅ Done (2026-04-23)
 
 Created `scripts/install-crush.sh` — auto-detects crush.json, merges mcp.esquisse
