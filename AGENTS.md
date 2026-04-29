@@ -332,6 +332,21 @@ Esquisse does NOT include and must NOT add:
    the naming sequence was formalised. It has been renumbered to
    `P1-000-trigger-tests.md`. The original file redirects to the canonical version.
 
+12. **[Review loop] Recurring reviewer objections — surface patch instead of structural fix.**
+   - Wrong: editing plan prose to say "verified" or "noted" when the reviewer flagged an unverified API signature or missing dependency.
+   - Right: before revising, read ALL past reports for the slug, build a complete issue table (Resolved / Recurring / New), and apply structural fixes: Planning Artifact for unverified APIs; `go get` + exact version recorded for missing dependencies; concrete code examples for ambiguous argument types.
+   - Why: the reviewer re-evaluates the full document from scratch each iteration. Prose patches fail the same check again.
+
+13. **[Review loop] Cross-task citations rejected as API verification.**
+   - Wrong: writing "Verified: see P0-004" or "signature confirmed in previous task" in a Specification section.
+   - Right: if a reviewer flags an external API signature even once, create a Planning Artifact at `docs/artifacts/{date}-{library}.md` with a three-column API Surface table sourced from `go doc` or source code.
+   - Why: Attack 7 (Hallucination Audit) requires independently-readable proof — cross-task references are not accepted.
+
+14. **[Review loop] Automatic Planning Artifact threshold — reviewer flag = trigger.**
+   - Wrong: only creating a Planning Artifact when a library is used by ≥ 2 tasks (EsquissePlan Step 2b threshold).
+   - Right: if the adversarial reviewer flags an unverified external API signature in ANY iteration, treat that as an automatic Step 2b trigger — create the artifact immediately, regardless of how many tasks reference the library.
+   - Why: the reviewer raises the same issue every iteration until grounded proof exists in a Planning Artifact.
+
 11. **`gate-review.sh` Stop hook does not fire in Crush (no Stop event yet).**
    - Wrong: assuming `gate-review.sh` blocks Crush sessions the way it blocks VS Code sessions.
    - Right: Crush users must manually run `bash scripts/gate-review.sh` before ending a

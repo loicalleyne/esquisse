@@ -199,31 +199,24 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 	}
 }
 
-// modelShortName extracts a filename-safe short name from a model ID.
-// "openai/gpt-4.1" → "gpt-4.1", "copilot/claude-sonnet-4.6" → "claude-sonnet-4.6".
-func modelShortName(model string) string {
-	if idx := strings.LastIndex(model, "/"); idx >= 0 {
-		return model[idx+1:]
-	}
-	return model
-}
-
 // writeReportFile writes the §9 report to
-// .adversarial/reports/review-{date}-iter{N}-r{round}-mcp-{model-short}-{plan-slug}.md.
-// The header metadata (plan, reviewer, iteration, date) is prepended by Go so the
-// model only needs to produce the body content.
+// .adversarial/reports/review-{date}-{plan-slug}-iter{N}-r{round}.md.
+// Grouping by plan-slug after date keeps all reports for the same task together
+// in directory listings. Model name belongs in the header, not the filename.
+// The header metadata (plan, reviewer, iteration, timestamp) is prepended by Go
+// so the model only needs to produce the body content.
 func writeReportFile(reportsDir, date, planSlug, usedModel string, iteration, roundNum, rounds int, body string) error {
-	short := modelShortName(usedModel)
-	fname := fmt.Sprintf("review-%s-iter%d-r%d-mcp-%s-%s.md",
-		date, iteration, roundNum, short, planSlug)
+	fname := fmt.Sprintf("review-%s-%s-iter%d-r%d.md",
+		date, planSlug, iteration, roundNum)
+	now := time.Now().UTC()
 	header := fmt.Sprintf(
 		"# Adversarial Review Report: %s\n\n"+
 			"**Plan:** %s\n"+
 			"**Reviewer:** esquisse-mcp (%s)\n"+
 			"**Iteration:** %d\n"+
 			"**Round:** %d of %d\n"+
-			"**Date:** %s\n\n---\n\n",
-		planSlug, planSlug, usedModel, iteration, roundNum, rounds, date,
+			"**Timestamp:** %s\n\n---\n\n",
+		planSlug, planSlug, usedModel, iteration, roundNum, rounds, now.Format(time.RFC3339),
 	)
 	content := []byte(header + body)
 	return os.WriteFile(filepath.Join(reportsDir, fname), content, 0o600)

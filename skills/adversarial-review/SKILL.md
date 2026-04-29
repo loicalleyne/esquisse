@@ -193,6 +193,34 @@ NEVER run rm, Remove-Item, or any destructive command targeting .adversarial/.
 Report files are the permanent audit trail — only create new files, never remove old ones.
 ```
 
+### Step 5b: Recurring Issues Check (iteration ≥ 2 only)
+
+If `state.Iteration` is ≥ 2 **and** the verdict is `CONDITIONAL` or `FAILED`:
+
+Before touching any task document, read ALL previous reports for this plan slug:
+```
+ls .adversarial/reports/review-*-{plan-slug}-*.md
+```
+Build a complete issue table — one row per unique issue ID across all reports. Mark each:
+- **Resolved** — fixed in a subsequent iteration
+- **Recurring** — appears in ≥ 2 reports without a documented fix
+- **New** — first appearance in the latest report
+
+For every **Recurring** issue:
+1. Read the original description in the first report where it appeared.
+2. Read the latest report's description of the same issue.
+3. Identify WHY the fix attempt did not satisfy the reviewer — surface patch vs. structural fix.
+4. Apply the structural fix, not the surface patch.
+
+**Common structural fixes for recurring issues:**
+- *Unverified external API signature* → create a Planning Artifact under `docs/artifacts/` (Step 2b of EsquissePlan). Cross-task citations ("verified in P0-004") are **never** accepted as a substitute.
+- *Dependency not in go.mod* → run `go get {pkg}` for real; record the exact module version added as a verified fact in Session Notes.
+- *Ambiguous prose about function arguments* → add a concrete code example in the Specification section showing the exact call site with argument types.
+- *Goroutine lifecycle unclosed* → name the exact `sync.WaitGroup` that tracks it and the line in the shutdown sequence where `wg.Wait()` is called.
+- *Swallowed errors or nil dereference* → name the exact error variable, the caller that checks it, and what it returns to the user on failure.
+
+Do NOT submit a revised plan that only patches prose. The reviewer re-reads the full document; every prior observation is re-evaluated from scratch.
+
 ### Step 6: Present verdict
 
 After the reviewer completes:

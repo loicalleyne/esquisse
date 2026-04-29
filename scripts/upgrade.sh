@@ -21,6 +21,7 @@
 #   - ~/.copilot/agents/Adversarial-r0.agent.md  (user-level)
 #   - ~/.copilot/agents/Adversarial-r1.agent.md  (user-level)
 #   - ~/.copilot/agents/Adversarial-r2.agent.md  (user-level)
+#   - ~/.copilot/skills/*/  (all Esquisse skills — user-level global VS Code install)
 #   - skills/adversarial-review/  (full overwrite)
 #   - skills/write-spec/          (full overwrite)
 #   - skills/explore-codebase/    (full overwrite)
@@ -159,6 +160,32 @@ if [[ -d "$src" ]]; then
 else
     echo "  missing  skills/adversarial-review/  (not found in Esquisse dir — skipped)"
 fi
+
+# ── 3b. Global VS Code skills (~/.copilot/skills/) ────────────────────────────
+echo ""
+echo "VS Code global skills (~/.copilot/skills/):"
+if command -v cmd.exe &>/dev/null 2>&1; then
+    _win_home_skills="$(wslpath "$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')")"
+    COPILOT_SKILLS_DIR="${_win_home_skills}/.copilot/skills"
+else
+    COPILOT_SKILLS_DIR="${HOME}/.copilot/skills"
+fi
+mkdir -p "$COPILOT_SKILLS_DIR"
+shopt -s nullglob
+for src_skill in "${ESQUISSE_DIR}/skills"/*/; do
+    skill_name="$(basename "$src_skill")"
+    dst_skill="${COPILOT_SKILLS_DIR}/${skill_name}"
+    rm -rf "${dst_skill}.tmp"
+    cp -RL "$src_skill" "${dst_skill}.tmp" || {
+        echo "  ERROR: cp failed for $skill_name" >&2
+        rm -rf "${dst_skill}.tmp"
+        exit 1
+    }
+    rm -rf "$dst_skill"
+    mv "${dst_skill}.tmp" "$dst_skill"
+    echo "  updated  ~/.copilot/skills/${skill_name}/"
+done
+# Note: shopt -s nullglob remains active for the rest of the script.
 
 # ── 4. Other skills (Batch 1): write-spec, explore-codebase, implement-task ───
 echo ""
