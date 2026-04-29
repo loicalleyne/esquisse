@@ -74,6 +74,7 @@ create_dir "docs/planning"
 create_dir "skills"
 create_dir "plan"
 create_dir "scripts"
+create_dir "scripts/hooks"
 
 # ── Starter documents ─────────────────────────────────────────────────────────
 echo ""
@@ -327,6 +328,21 @@ for item in new-task.sh gate-check.sh rebuild-ast.sh macros.sql macros_go.sql; d
     fi
 done
 
+# Crush PreToolUse hook
+src="${SCRIPT_DIR}/hooks/protect-adversarial.sh"
+dst="${TARGET_DIR}/scripts/hooks/protect-adversarial.sh"
+if [[ -f "$src" ]]; then
+    if [[ ! -f "$dst" ]]; then
+        cp "$src" "$dst"
+        chmod +x "$dst"
+        echo "  created  scripts/hooks/protect-adversarial.sh"
+    else
+        echo "  exists   scripts/hooks/protect-adversarial.sh  (skipped)"
+    fi
+else
+    echo "  missing  scripts/hooks/protect-adversarial.sh  (not found in Esquisse dir)"
+fi
+
 # ── Copy skills alongside (idempotent) ───────────────────────────────────────
 echo ""
 echo "Skills:"
@@ -465,6 +481,11 @@ echo ""
 echo "NOTE: To enable multi-model adversarial review in Crush, build and install"
 echo "      esquisse-mcp and add the MCP entry to your crush.json."
 echo "      See esquisse-mcp/README.md."
+echo ""
+echo "NOTE: To protect .adversarial/ from accidental deletion in Crush, add this"
+echo "      to your project crush.json:"
+echo "      { \"hooks\": { \"PreToolUse\": [{ \"matcher\": \"^bash\$\", \"command\": \"./scripts/hooks/protect-adversarial.sh\" }] } }"
+echo "      See skills/adversarial-review/crush-models.md for details."
 
 # Hooks fallback
 src="${ESQUISSE_DIR}/.github/hooks/hooks.json"

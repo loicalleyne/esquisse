@@ -34,6 +34,10 @@ working in Esquisse-managed projects:
 - **`adversarial_review`** — runs N rounds of cross-model adversarial review via
   `crush run --model`, using a family-interleaved randomized model order, with
   enterprise-policy fallback. Writes verdict to `.adversarial/{slug}.json`.
+  **Pass `plan_files` as newline-separated workspace-relative paths** (e.g.
+  `docs/tasks/P1-001-foo.md`); the server reads files from `project_root` directly.
+  Do NOT inline or summarize file contents — pass paths only.
+  Default `rounds` = 1.
 - **`gate_review`** — reads all `.adversarial/*.json` files and returns
   `blocked=true` if any plan has a FAILED or missing verdict.
 - **`write_planning_artifact`** — writes a Planning Artifact file to

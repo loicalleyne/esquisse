@@ -14,7 +14,8 @@ import (
 
 // gateInput is the input schema for the gate_review tool.
 type gateInput struct {
-	Strict bool `json:"strict" jsonschema:"If true, block when no state files exist"`
+	Strict      bool   `json:"strict"                 jsonschema:"If true, block when no state files exist"`
+	ProjectRoot string `json:"project_root,omitempty" jsonschema:"Absolute path to the project root. Overrides the --project-root flag set at server startup. Required when the server is shared across multiple projects."`
 }
 
 // gateOutput is the structured response for gate_review.
@@ -26,7 +27,13 @@ type gateOutput struct {
 
 func newGateHandler(projectRoot string) func(context.Context, *mcp.CallToolRequest, gateInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input gateInput) (*mcp.CallToolResult, any, error) {
-		rawDir := stateDir(projectRoot)
+		effectiveRoot := projectRoot
+		if strings.TrimSpace(input.ProjectRoot) != "" {
+			effectiveRoot = strings.TrimSpace(input.ProjectRoot)
+		} else if effectiveRoot == "" {
+			return gateResult(gateOutput{Blocked: true, Reason: "project_root is required: pass the absolute path to the project being checked"})
+		}
+		rawDir := stateDir(effectiveRoot)
 		dir, err := filepath.Abs(filepath.Clean(rawDir))
 		if err != nil {
 			dir = filepath.Clean(rawDir)

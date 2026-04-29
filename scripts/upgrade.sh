@@ -16,6 +16,7 @@
 #   - scripts/new-task.sh
 #   - scripts/rebuild-ast.sh
 #   - scripts/macros.sql, scripts/macros_go.sql
+#   - scripts/hooks/protect-adversarial.sh  (Crush PreToolUse hook)
 #   - ~/.copilot/agents/EsquissePlan.agent.md  (user-level — shared across projects)
 #   - ~/.copilot/agents/Adversarial-r0.agent.md  (user-level)
 #   - ~/.copilot/agents/Adversarial-r1.agent.md  (user-level)
@@ -90,6 +91,7 @@ overwrite_file() {
 # ── 1. Scripts ────────────────────────────────────────────────────────────────
 echo "Scripts:"
 mkdir -p scripts
+mkdir -p scripts/hooks
 mkdir -p docs/artifacts
 echo "  ensured  docs/artifacts/"
 for item in gate-review.sh gate-check.sh new-task.sh rebuild-ast.sh macros.sql macros_go.sql; do
@@ -103,6 +105,17 @@ for item in gate-review.sh gate-check.sh new-task.sh rebuild-ast.sh macros.sql m
         echo "  missing  scripts/${item}  (not found in Esquisse dir — skipped)"
     fi
 done
+
+# Crush PreToolUse hook
+src="${SCRIPT_DIR}/hooks/protect-adversarial.sh"
+dst="${TARGET_DIR}/scripts/hooks/protect-adversarial.sh"
+if [[ -f "$src" ]]; then
+    cp "$src" "$dst"
+    chmod +x "$dst"
+    echo "  updated  scripts/hooks/protect-adversarial.sh"
+else
+    echo "  missing  scripts/hooks/protect-adversarial.sh  (not found in Esquisse dir — skipped)"
+fi
 
 # ── 2. Agent files ────────────────────────────────────────────────────────────
 echo ""

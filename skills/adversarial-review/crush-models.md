@@ -81,3 +81,41 @@ fi
 The specified model providers must be configured in `~/.config/crush/crush.json`
 (or the project-local `crush.json`). If the provider is not configured, the
 `crush run` call will fail with "no providers configured".
+
+---
+
+## Crush Hooks Integration
+
+Crush supports `PreToolUse` hooks (see [crush hooks docs](https://github.com/charmbracelet/crush/tree/main/docs/hooks)).
+Esquisse ships `scripts/hooks/protect-adversarial.sh` which blocks any bash
+command that destructively targets `.adversarial/` at the tool level — stronger
+than text instructions alone.
+
+### Recommended `crush.json` hook config
+
+Add to your project-local `crush.json` (or `~/.config/crush/crush.json` for global):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^bash$",
+        "command": "./scripts/hooks/protect-adversarial.sh"
+      }
+    ]
+  }
+}
+```
+
+The hook exits 2 (block) if it detects `rm`, `rmdir`, `Remove-Item`,
+`find -delete`, or `git clean` targeting `.adversarial/`. All other bash
+commands pass through unchanged (exit 0, no decision).
+
+### `gate-review.sh` and Crush
+
+`scripts/gate-review.sh` is a VS Code Stop hook (wired via `.github/hooks/hooks.json`).
+**Crush does not yet support a Stop hook** — only `PreToolUse` is available.
+Until Crush adds a Stop event, Crush users must manually run
+`bash scripts/gate-review.sh` before ending a planning session, or rely on
+the `gate_review` MCP tool from `esquisse-mcp`.

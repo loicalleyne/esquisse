@@ -70,11 +70,13 @@ esquisse/
 │   ├── init.sh                   ← Bootstrap a new project
 │   ├── new-task.sh               ← Scaffold next task document
 │   ├── gate-check.sh             ← Phase gate validation
-│   ├── gate-review.sh            ← Adversarial review enforcement hook
+│   ├── gate-review.sh            ← Adversarial review enforcement hook (VS Code Stop)
 │   ├── upgrade.sh                ← Idempotent upgrade for adopted projects
 │   ├── rebuild-ast.sh            ← Rebuild DuckDB AST cache
 │   ├── macros.sql                ← Universal DuckDB/sitting_duck AST macros
-│   └── macros_go.sql             ← Go-specific AST macros
+│   ├── macros_go.sql             ← Go-specific AST macros
+│   └── hooks/
+│       └── protect-adversarial.sh ← Crush PreToolUse hook: block destructive .adversarial/ commands
 │
 ├── skills/                       ← PRIMARY deliverable — one dir per skill
 │   ├── adopt-project/
@@ -222,7 +224,9 @@ Code templates belong in `TEMPLATES.md`, not in SKILL.md.
 | `Adversarial-r0/r1/r2` | `.github/agents/` | Rotating reviewer agents |
 | `adversarial-review` skill | `skills/adversarial-review/` | Orchestrator skill |
 | `.adversarial/state.json` | project root (gitignored) | Rotation state |
-| Stop hook enforcement | `.github/hooks/hooks.json` | Blocks session on pending review |
+| Stop hook enforcement | `.github/hooks/hooks.json` | VS Code: blocks session on pending review |
+| `protect-adversarial.sh` | `scripts/hooks/` | Crush PreToolUse hook: blocks destructive `.adversarial/` bash commands |
+| `gate_review` MCP tool | `esquisse-mcp` | Crush: manual gate check (no Stop event in Crush yet) |
 
 ### AST Cache
 
@@ -325,6 +329,16 @@ Esquisse does NOT include and must NOT add:
 10. **P1-000 vs P1-001 task files.** `P1-001-trigger-tests.md` was created before
    the naming sequence was formalised. It has been renumbered to
    `P1-000-trigger-tests.md`. The original file redirects to the canonical version.
+
+11. **`gate-review.sh` Stop hook does not fire in Crush (no Stop event yet).**
+   - Wrong: assuming `gate-review.sh` blocks Crush sessions the way it blocks VS Code sessions.
+   - Right: Crush users must manually run `bash scripts/gate-review.sh` before ending a
+     planning session, or use the `gate_review` MCP tool from `esquisse-mcp`.
+   - Mitigation: add `scripts/hooks/protect-adversarial.sh` as a Crush `PreToolUse` hook
+     to at least block destructive commands targeting `.adversarial/`. See
+     `skills/adversarial-review/crush-models.md` for the `crush.json` snippet.
+   - Why: Crush currently only supports `PreToolUse`; there is no `Stop` or session-end
+     lifecycle hook. This is a known gap tracked upstream.
 
 ---
 

@@ -61,6 +61,7 @@ correctly in both VS Code Copilot Chat and Crush.
 | [P2-012-eliminate-bare-python-in-scripts](../tasks/P2-012-eliminate-bare-python-in-scripts.md) | ✅ Done | Replace bare `python3` JSON calls in gate-review.sh and upgrade.sh with `jq` + grep/sed fallback |
 | [P2-013-ast-planning-context](../tasks/P2-013-ast-planning-context.md) | ✅ Done | `planning_context` DDL + macros; EsquissePlan Step 2c; implement-task drift check + orientation |
 | [P2-014-install-crush-sh](../tasks/P2-014-install-crush-sh.md) | ✅ Done | `scripts/install-crush.sh` — auto-detect crush.json, jq-merge mcp.esquisse entry, copy skills; works on Termux |
+| [P2-015-write-readme-skill](../tasks/P2-015-write-readme-skill.md) | ✅ Done | New skill: generate/update README.md in bufarrow style (value prop, use-cases table, named quick-start patterns, perf tables, reference section) |
 
 ---
 

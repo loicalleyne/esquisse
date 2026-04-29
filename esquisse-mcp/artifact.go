@@ -25,6 +25,7 @@ type artifactInput struct {
 	Constraints     string   `json:"constraints"`
 	AntiPatterns    string   `json:"anti_patterns"`
 	MinimalExamples string   `json:"minimal_examples,omitempty"`
+	ProjectRoot     string   `json:"project_root,omitempty" jsonschema:"Absolute path to the project root. Overrides the --project-root flag set at server startup. Required when the server is shared across multiple projects."`
 }
 
 // artifactOutput is the structured response for write_planning_artifact.
@@ -91,6 +92,12 @@ func injectPrerequisite(projectRoot, artifactRelPath, taskPath string) (injectio
 // newArtifactHandler returns the handler for the write_planning_artifact tool.
 func newArtifactHandler(projectRoot string) func(context.Context, *mcp.CallToolRequest, artifactInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input artifactInput) (*mcp.CallToolResult, any, error) {
+		effectiveRoot := projectRoot
+		if strings.TrimSpace(input.ProjectRoot) != "" {
+			effectiveRoot = strings.TrimSpace(input.ProjectRoot)
+		} else if effectiveRoot == "" {
+			return mcpErr("project_root is required: pass the absolute path to the project")
+		}
 		// 1. Slug validation.
 		if err := validateSlug(input.Slug); err != nil {
 			return mcpErr("%v", err)
@@ -136,7 +143,7 @@ func newArtifactHandler(projectRoot string) func(context.Context, *mcp.CallToolR
 
 		// 6. Build file path.
 		filename := today + "-" + input.Slug + ".md"
-		dir := filepath.Join(projectRoot, "docs", "artifacts")
+		dir := filepath.Join(effectiveRoot, "docs", "artifacts")
 		absPath := filepath.Join(dir, filename)
 
 		// 7. Create directory.
@@ -173,7 +180,7 @@ func newArtifactHandler(projectRoot string) func(context.Context, *mcp.CallToolR
 		}
 
 		// 10. Compute relative path.
-		relPath, err := filepath.Rel(projectRoot, absPath)
+		relPath, err := filepath.Rel(effectiveRoot, absPath)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -182,7 +189,7 @@ func newArtifactHandler(projectRoot string) func(context.Context, *mcp.CallToolR
 		// 10b. Inject prerequisite blockquote into existing referenced task files.
 		var injectedInto, notFound, alreadyPresent []string
 		for _, entry := range input.ReferencedBy {
-			result, injErr := injectPrerequisite(projectRoot, relPath, entry)
+			result, injErr := injectPrerequisite(effectiveRoot, relPath, entry)
 			if injErr != nil {
 				return nil, nil, injErr
 			}
