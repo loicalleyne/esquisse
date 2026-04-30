@@ -193,35 +193,28 @@ NEVER run rm, Remove-Item, or any destructive command targeting .adversarial/.
 Report files are the permanent audit trail — only create new files, never remove old ones.
 ```
 
-### Step 5b: Recurring Issues Check (iteration ≥ 2 only)
+## Step 6 — React to verdict
 
-If `state.Iteration` is ≥ 2 **and** the verdict is `CONDITIONAL` or `FAILED`:
+**PASSED**: Signal that implementation may begin.
 
-Before touching any task document, read ALL previous reports for this plan slug:
-```
-ls .adversarial/reports/review-*-{plan-slug}-*.md
-```
-Build a complete issue table — one row per unique issue ID across all reports. Mark each:
-- **Resolved** — fixed in a subsequent iteration
-- **Recurring** — appears in ≥ 2 reports without a documented fix
-- **New** — first appearance in the latest report
+**CONDITIONAL or FAILED**:
 
-For every **Recurring** issue:
-1. Read the original description in the first report where it appeared.
-2. Read the latest report's description of the same issue.
-3. Identify WHY the fix attempt did not satisfy the reviewer — surface patch vs. structural fix.
-4. Apply the structural fix, not the surface patch.
+1. Read all past reports: `list_dir(".adversarial/{slug}/")` → `read_file` each `*-review.md`.
+   Build: Resolved / Recurring / New issue table.
+2. Execute Fix Type actions (no prose patches):
+   - `PLANNING_ARTIFACT` → run `go doc`/fetch docs; create `docs/artifacts/YYYY-MM-DD-{slug}.md`
+   - `DEPENDENCY` → `go get {pkg}@{version}`; record exact version in task Specification
+   - `TEST_NAME` → add exact function name to Acceptance Criteria
+   - `SPEC_EDIT` → rewrite the named section with sourced facts
+   - `TASK_SPLIT` → create new task doc at the named boundary
+   - `SCOPE_REMOVE` → delete the named section
+3. Write planner-fixes artifact:
+   `docs/adversarial/{slug}/iter{NN}-{YYYY-MM-DD}-{HHmm}-planner-fixes.md` (SCHEMAS.md §11)
+4. Return to Step 1. Next slot = incremented iteration % 3.
 
-**Common structural fixes for recurring issues:**
-- *Unverified external API signature* → create a Planning Artifact under `docs/artifacts/` (Step 2b of EsquissePlan). Cross-task citations ("verified in P0-004") are **never** accepted as a substitute.
-- *Dependency not in go.mod* → run `go get {pkg}` for real; record the exact module version added as a verified fact in Session Notes.
-- *Ambiguous prose about function arguments* → add a concrete code example in the Specification section showing the exact call site with argument types.
-- *Goroutine lifecycle unclosed* → name the exact `sync.WaitGroup` that tracks it and the line in the shutdown sequence where `wg.Wait()` is called.
-- *Swallowed errors or nil dereference* → name the exact error variable, the caller that checks it, and what it returns to the user on failure.
+> Hand off to ImplementerAgent only when verdict is PASSED, or CONDITIONAL with all BLOCKING fixes resolved.
 
-Do NOT submit a revised plan that only patches prose. The reviewer re-reads the full document; every prior observation is re-evaluated from scratch.
-
-### Step 6: Present verdict
+### Step 7: Present verdict
 
 After the reviewer completes:
 1. Read `.adversarial/{plan-slug}.json` to confirm `last_verdict`.
@@ -241,8 +234,7 @@ After the reviewer completes:
 
 ## Constraints & Security
 
-- DO NOT modify plan documents or task docs during this skill. Read only.
-- The reviewer agents write to `.adversarial/` only — not to `docs/`.
+- Reviewer agents (Adversarial-r0/r1/r2) are read-only. They write to `.adversarial/` only — not to `docs/` or task documents.
 - DO NOT skip rotation: always compute `slot = iteration % 3` and dispatch
   the correct agent. Self-review (same model as PlanD) defeats the purpose.
 - DO NOT accept a FAILED verdict as "good enough to proceed." FAILED is a

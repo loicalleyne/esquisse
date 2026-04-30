@@ -4,8 +4,27 @@
 
 - **Phase:** P3 — Adversarial Review Infrastructure
 - **Last updated:** 2026-04-30
+- **Last completed task:** P3-010 — planner-hardening
 
 ## Last Session
+
+**P3-010: planner-hardening** — ✅ Done (2026-04-30)
+
+Hardened EsquissePlan with Critical Rules box, compressed Step 2c, structured Fix Type Step 5, and affirmative guardrail rewrites. Added condensed Fix Type protocol (Step 6) to adversarial-review SKILL.md. Appended §11 Planner Fixes Artifact schema to SCHEMAS.md. Added Common Mistakes entry #15 (negation anti-pattern) to AGENTS.md.
+
+Files changed:
+- `.github/agents/EsquissePlan.agent.md` — Critical Rules box; Step 2c compressed; Step 5 replaced with Fix Type workflow; 4 guardrails rewritten as affirmatives (211→196 lines)
+- `skills/adversarial-review/SKILL.md` — Step 5b replaced with new Step 6 — React to verdict; Step 6→Step 7 renumbered; read-only constraint narrowed to reviewer agents only
+- `SCHEMAS.md` — §11 Planner Fixes Artifact schema appended
+- `AGENTS.md` — Common Mistakes entry #15 (negation anti-pattern) added
+
+Open decisions:
+- None
+
+Blocked items:
+- None
+
+---
 
 **P3-009: reviewer-fix-type-table** — ✅ Done (2026-04-30)
 

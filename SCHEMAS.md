@@ -619,7 +619,7 @@ permanently block the Stop hook. Either fix them to PASSED or delete them.
 
 ---
 
-## 9. Adversarial Review Report Schema (`.adversarial/reports/review-{date}-iter{N}-r{round}-{plan-slug}.md`)
+## 9. Adversarial Review Report Schema (`.adversarial/{plan-slug}/iter{NN}-{YYYY-MM-DD}-{HHmm}-review.md`)
 
 **Canonical source of truth** for the report file format written by adversarial reviewers
 and by the `esquisse-mcp` `adversarial_review` tool. The state file (§8) records the
@@ -628,21 +628,21 @@ and by the `esquisse-mcp` `adversarial_review` tool. The state file (§8) record
 ### File naming convention
 
 ```
-.adversarial/reports/review-{YYYY-MM-DD}-iter{N}-r{round}-{plan-slug}.md
+.adversarial/{plan-slug}/iter{NN}-{YYYY-MM-DD}-{HHmm}-review.md
 ```
 
 | Segment | Source |
 |---------|--------|
+| `{plan-slug}` | Slug subdirectory — pre-validated by `validateSlug` (see §8 slug derivation) |
+| `iter{NN}` | Zero-padded value of `iteration` in the state file **at the start of this review run** (ensures lex sort = chrono sort up to iter 99) |
 | `{YYYY-MM-DD}` | UTC date the review ran |
-| `iter{N}` | Value of `iteration` in the state file **at the start of this review run** |
-| `r{round}` | 1-based round number within a multi-round run |
-| `{plan-slug}` | Same slug used for the state file (see §8 slug derivation) |
+| `{HHmm}` | UTC time (hours + minutes) the review ran |
 
 Examples:
 | State file | Report file (round 1 of 1) |
 |---|---|
-| `.adversarial/roadmap.json` | `.adversarial/reports/review-2026-04-21-iter0-r1-roadmap.md` |
-| `.adversarial/P8-002-pipeline.json` | `.adversarial/reports/review-2026-04-21-iter2-r1-P8-002-pipeline.md` |
+| `.adversarial/roadmap.json` | `.adversarial/roadmap/iter00-2026-04-21-1023-review.md` |
+| `.adversarial/P8-002-pipeline.json` | `.adversarial/P8-002-pipeline/iter02-2026-04-21-1455-review.md` |
 
 ### Required content
 
@@ -786,3 +786,42 @@ Omit this section if no code examples are necessary.
 **Co-update rule:** Any change to the required section list in §10 MUST be reflected in `skills/implement-task/SKILL.md` Step 2b, and vice versa. Both files must name the same set of required sections.
 
 **Sizing guidance:** Keep each section ≤ 500 tokens. If an artifact exceeds this, split by sub-domain.
+
+## §11 — Planner Fixes Artifact
+
+**Purpose:** Records the structural fixes applied by EsquissePlan after a CONDITIONAL or FAILED
+adversarial review verdict. Provides the audit trail for the review cycle.
+
+**Path:** `docs/adversarial/{plan-slug}/iter{NN}-{YYYY-MM-DD}-{HHmm}-planner-fixes.md`
+
+Where `{NN}` is the zero-padded iteration number matching the review file this responds to. Files live under `docs/adversarial/` and are git-tracked. Distinct from reviewer reports which are gitignored under `.adversarial/{slug}/`.
+
+### Required sections
+
+| Section | Type | Required | Notes |
+|---|---|---|---|
+| Title | H1 | Yes | `# Planner Fix Summary — {plan-slug} — Iteration {N}` |
+| Date | metadata line | Yes | `**Date**: {YYYY-MM-DD HH:MM}` |
+| Responding to | metadata line | Yes | Markdown link to the `*-review.md` file this addresses |
+| Model | metadata line | Yes | EsquissePlan model name for this session |
+| Issue Resolution | table | Yes | See columns below |
+| Unresolved | table | Yes | Empty row (`—`) if all issues resolved |
+| Next Review | metadata line | Yes | `Slot: {slot} → {model name}` |
+
+### Issue Resolution table columns
+
+| Column | Notes |
+|---|---|
+| Fix Type | One of the six Fix Type values (GLOSSARY.md) |
+| Attack | `A1`–`A7` |
+| Issue | One-line description matching the reviewer's table |
+| Action Taken | Exact command run or file modified |
+| Resolved | `✅` or `❌` with reason |
+
+### Unresolved table columns
+
+| Column | Notes |
+|---|---|
+| Fix Type | As above |
+| Issue | As above |
+| Reason not addressed | Must explain why; never leave blank |

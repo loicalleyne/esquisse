@@ -305,8 +305,8 @@ Esquisse does NOT include and must NOT add:
 
 5. **Unsanitized `plan_slug` passed to `statePath()` in esquisse-mcp.**
    - Wrong: calling `ReadState`/`WriteState` with a user-supplied slug without validation
-   - Right: `validateSlug` must reject any slug containing `/`, `\`, or path traversal sequences
-   - Why: `filepath.Join` cleans paths, allowing `../../etc/evil.json` writes without a guard.
+   - Right: `validateSlug` must reject any slug containing `/`, `\`, or path traversal sequences — AND must explicitly reject `".."` via `strings.Contains(slug, "..")`. `filepath.Clean("..")` returns `".."` unchanged; `".."` contains no slash; so the clean+slash checks alone do NOT catch it.
+   - Why: `filepath.Join` cleans paths, allowing `../../etc/evil.json` writes without a guard. Since P3-008 uses the slug as a **directory component** (`.adversarial/{slug}/`), `".."` resolves to the project root — files would be written outside `.adversarial/`.
 
 6. **`filepath.Dir(e) == dir` fails when `dir` is a relative path.**
    - Wrong: comparing `filepath.Dir(globResult)` against an uncleaned relative `dir`
@@ -346,6 +346,13 @@ Esquisse does NOT include and must NOT add:
    - Wrong: only creating a Planning Artifact when a library is used by ≥ 2 tasks (EsquissePlan Step 2b threshold).
    - Right: if the adversarial reviewer flags an unverified external API signature in ANY iteration, treat that as an automatic Step 2b trigger — create the artifact immediately, regardless of how many tasks reference the library.
    - Why: the reviewer raises the same issue every iteration until grounded proof exists in a Planning Artifact.
+
+15. **[Prompt Engineering] Negation guardrails are less reliable than affirmative imperatives.**
+    - Wrong: `"Never write code"`, `"Do not add disclaimers"`, `"Never output markdown"`
+    - Right: `"Write documents only"`, `"Output raw JSON only"`, `"Affirmative verb + object"`
+    - Why: LLMs trained with RLHF often process negations unreliably under generation pressure
+      (arXiv:2406.05494). Affirmative imperatives engage the same constraint as an action
+      rather than a prohibition, improving adherence in long-context sessions.
 
 11. **`gate-review.sh` Stop hook does not fire in Crush (no Stop event yet).**
    - Wrong: assuming `gate-review.sh` blocks Crush sessions the way it blocks VS Code sessions.
