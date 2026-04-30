@@ -79,6 +79,9 @@ conventions. Caller-model exclusion for adversarial reviews.
 | [P3-005-mcp-model-availability-cache](../tasks/P3-005-mcp-model-availability-cache.md) | ✅ Done | Background availability-probe goroutine + disk cache for `discover_models`; structured JSON response with `available`, `probing`, `stale`; `force_refresh` param; `ESQUISSE_MODEL_CACHE_TTL_DAYS` |
 | [P3-006-mcp-env-model-pool](../tasks/P3-006-mcp-env-model-pool.md) | ✅ Done | Remove broken model-probing machinery; replace with `ESQUISSE_MODELS` comma-separated env var; drop `discover_models` tool |
 | [P3-007-upgrade-crush-sh](../tasks/P3-007-upgrade-crush-sh.md) | ✅ Done | `scripts/upgrade-crush.sh` — sync Esquisse skills and hooks to global Crush config |
+| [P3-008-adversarial-report-nesting](../tasks/P3-008-adversarial-report-nesting.md) | ✅ Done | Nest adversarial reports under `docs/adversarial/{slug}/`; filename format `iter{NN}-{date}-{time}-review.md` |
+| [P3-009-reviewer-fix-type-table](../tasks/P3-009-reviewer-fix-type-table.md) | ✅ Done | Reviewer agents emit structured Fix Type tables; tool list trimmed to 5; `reviewPromptTemplate` updated |
+| [P3-010-planner-hardening](../tasks/P3-010-planner-hardening.md) | ⬜ Ready | EsquissePlan: critical rules box, Step 2c compress, Step 5 Fix Type protocol, guardrail rewrites; adversarial-review SKILL.md Step 5; SCHEMAS.md §11 |
 
 ---
 

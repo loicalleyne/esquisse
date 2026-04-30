@@ -2,10 +2,34 @@
 
 ## Current Status
 
-- **Phase:** P2 — Robustness & Tooling
-- **Last updated:** 2026-04-23
+- **Phase:** P3 — Adversarial Review Infrastructure
+- **Last updated:** 2026-04-30
 
 ## Last Session
+
+**P3-009: reviewer-fix-type-table** — ✅ Done (2026-04-30)
+
+Updated all three adversarial reviewer agents and `esquisse-mcp/adversarial.go` to emit structured Fix Type tables in Required Changes. Tool lists trimmed. Report path updated to new nested format.
+
+Files changed:
+- `.github/agents/Adversarial-r0.agent.md` — tools trimmed, report path, Required Changes section, severity line
+- `.github/agents/Adversarial-r1.agent.md` — same
+- `.github/agents/Adversarial-r2.agent.md` — same
+- `esquisse-mcp/adversarial.go` — Fix Type table instruction in preamble
+- `GLOSSARY.md` — Fix Type enum entry added
+
+Key notes:
+- §2 spec mentioned a `report_path` JSON block that doesn't exist in current agents (P3-008 excluded agent files from scope). Only Step 3 path text was updated.
+- "Do not soften them." in spec was actually "Do not soften verdicts. FAILED means FAILED." in files — replaced as intended.
+- gofumpt applied after adversarial.go edit to normalize indentation.
+
+All acceptance criteria passed. Spec review: COMPLIANT. Quality review: APPROVED.
+
+**Next**: P3-010 (EsquissePlan Step 5 response protocol)
+
+---
+
+
 
 **P3-007: upgrade-crush.sh — Crush Skills/Hooks Sync** — ✅ Done (2026-04-29)
 
@@ -159,3 +183,4 @@ None.
 | 2026-04-19 | P3-001 revised: exclude_provider → exclude_model (exact match, regex `^[a-zA-Z0-9_./-]+$`, fail-open); 3 adversarial rounds (iter 10→13, CONDITIONAL→FAILED→PASSED); implemented via ImplementerAgent; SpecReviewerAgent COMPLIANT; CodeQualityReviewerAgent APPROVED (2 minor style notes); task Done |
 | 2026-04-19 | P3-005 task written: background model availability probe + disk cache for discover_models; structured JSON response (available/probing/stale); 3 adversarial rounds (iter 0→3, CONDITIONAL→CONDITIONAL→PASSED); plan cleared for implementation |
 | 2026-04-19 | P3-005 implemented: ModelEntry/ModelCache/modelProber in models.go; atomic cache write (CreateTemp+Rename); newModelProberWithFuncs for test injection; main.go wired with context cancel; tools.go registerTools updated; AGENTS.md updated (3 fixes from SpecReviewerAgent); TestModelProber suite (13 ACs) + TestModelProberFilterAllowedProviders + TestModelProberConcurrentAccess added; 2 race fixes applied (gate channel in no_cache_returns_probing_state; deferred entries check in force_refresh_resets_state); SpecReviewerAgent COMPLIANT; CodeQualityReviewerAgent APPROVED (1 deferred minor: t.Parallel on TestModelProberConcurrentAccess); task Done |
+| 2026-04-30 | P3-008 implemented: adversarial report nesting — `reportsDir` changed from `.adversarial/reports` to `.adversarial/{input.PlanSlug}`; `writeReportFile` filename changed to `iter%02d-{date}-{HHmm}-review.md`; preamble anti-destruction path updated; `adversarial_test.go` created with 5 tests (all pass); `SCHEMAS.md` §9 updated; all acceptance criteria pass; full suite passes with no regressions. CodeQualityReview found `validateSlug` did not reject `".."` — fixed with `strings.Contains` guard in `state.go`; `ReadDir` error discards fixed in 2 tests; redundancy comment added. Re-review APPROVED |

@@ -2,9 +2,8 @@
 package main
 
 import (
-	_ "embed"
-
 	"context"
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -41,11 +40,11 @@ func extractVerdict(output string) string {
 
 // adversarialInput is the input schema for the adversarial_review tool.
 type adversarialInput struct {
-	PlanSlug    string `json:"plan_slug"               jsonschema:"Plan slug used as state file name"`
-	PlanFiles   string `json:"plan_files"              jsonschema:"Newline-separated list of workspace-relative paths to task files (e.g. docs/tasks/P1-001-foo.md). The server reads files from project_root — do NOT inline file contents."`
-	Rounds      int    `json:"rounds,omitempty"        jsonschema:"Number of review rounds (default 1, max 50)"`
+	PlanSlug     string `json:"plan_slug"               jsonschema:"Plan slug used as state file name"`
+	PlanFiles    string `json:"plan_files"              jsonschema:"Newline-separated list of workspace-relative paths to task files (e.g. docs/tasks/P1-001-foo.md). The server reads files from project_root — do NOT inline file contents."`
+	Rounds       int    `json:"rounds,omitempty"        jsonschema:"Number of review rounds (default 1, max 50)"`
 	ExcludeModel string `json:"exclude_model,omitempty" jsonschema:"Full model ID to exclude from review pool (e.g. copilot/claude-sonnet-4.6). Obtain from crush_info tool. Empty or omitted = no exclusion."`
-	ProjectRoot string `json:"project_root,omitempty"  jsonschema:"Absolute path to the project root. Overrides the --project-root flag set at server startup. Required when the server is shared across multiple projects."`
+	ProjectRoot  string `json:"project_root,omitempty"  jsonschema:"Absolute path to the project root. Overrides the --project-root flag set at server startup. Required when the server is shared across multiple projects."`
 }
 
 func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallToolRequest, adversarialInput) (*mcp.CallToolResult, any, error) {
@@ -96,8 +95,10 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 		rounds := effectiveRounds(input.Rounds)
 		rotOrder := buildRotationOrder(effectivePool, rounds)
 
-		// Ensure .adversarial/reports/ exists so the reviewer model can write report files.
-		reportsDir := filepath.Join(effectiveRoot, ".adversarial", "reports")
+		// PlanSlug validated via ReadState (calls validateSlug) earlier in handler — safe as dir component.
+		// MkdirAll here is intentional: fail-fast before expensive LLM calls. writeReportFile
+		// also calls MkdirAll for self-contained test coverage — the double call is idempotent.
+		reportsDir := filepath.Join(effectiveRoot, ".adversarial", input.PlanSlug)
 		if err := os.MkdirAll(reportsDir, 0o700); err != nil {
 			return mcpErr("failed to create reports directory %q: %v", reportsDir, err)
 		}
@@ -130,9 +131,13 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 					"Produce ONLY the report body — the file header (plan, reviewer, iteration, date) is\n"+
 					"added automatically by esquisse-mcp. Do NOT write any files. Do NOT write the state file.\n"+
 					"NEVER run rm, Remove-Item, or any destructive command targeting .adversarial/ or its subdirectories.\n"+
-					"NEVER delete, overwrite, or move any existing report file under .adversarial/reports/.\n"+
-					"Report files are the permanent audit trail — only esquisse-mcp creates them.\n\n"+
-					"Your output MUST follow this exact structure:\n\n"+
+					"NEVER delete, overwrite, or move any existing report file under .adversarial/.\n"+
+					"Report files are the permanent audit trail — only esquisse-mcp creates them.\n\n"+"Format your Required Changes section as a markdown table:\n\n"+
+					"| Priority | Attack | Issue | Fix Type | Concrete Action |\n"+
+					"|---|---|---|---|---|\n\n"+
+					"Priority: BLOCKING or ADVISORY\n"+
+					"Fix Type (use exactly one): PLANNING_ARTIFACT | DEPENDENCY | TEST_NAME | SPEC_EDIT | TASK_SPLIT | SCOPE_REMOVE\n"+
+					"Concrete Action: a specific runnable command or edit, not a description of intent.\n\n"+"Your output MUST follow this exact structure:\n\n"+
 					"## Attack Results\n\n"+
 					"| # | Attack Vector | Result | Notes |\n"+
 					"|---|---|---|---|\n"+
@@ -200,15 +205,21 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 }
 
 // writeReportFile writes the §9 report to
-// .adversarial/reports/review-{date}-{plan-slug}-iter{N}-r{round}.md.
-// Grouping by plan-slug after date keeps all reports for the same task together
-// in directory listings. Model name belongs in the header, not the filename.
+// .adversarial/{plan-slug}/iter{NN}-{YYYY-MM-DD}-{HHmm}-review.md.
+// Slug is the parent directory name; zero-padded iter ensures lex sort = chrono sort.
+// Model name belongs in the header, not the filename.
 // The header metadata (plan, reviewer, iteration, timestamp) is prepended by Go
 // so the model only needs to produce the body content.
 func writeReportFile(reportsDir, date, planSlug, usedModel string, iteration, roundNum, rounds int, body string) error {
-	fname := fmt.Sprintf("review-%s-%s-iter%d-r%d.md",
-		date, planSlug, iteration, roundNum)
+	if err := os.MkdirAll(reportsDir, 0o700); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
+	fname := fmt.Sprintf("iter%02d-%s-%s-review.md",
+		iteration,
+		date,
+		now.Format("1504"),
+	)
 	header := fmt.Sprintf(
 		"# Adversarial Review Report: %s\n\n"+
 			"**Plan:** %s\n"+
