@@ -32,6 +32,13 @@ func validateSlug(planSlug string) error {
 	if clean != planSlug || strings.ContainsAny(planSlug, "/\\") {
 		return fmt.Errorf("invalid plan_slug %q: must not contain path separators", planSlug)
 	}
+	// Reject ".." explicitly: filepath.Clean("..") == ".." (no change), and ".."
+	// contains no slash, so the checks above do not catch it. With the new
+	// per-slug report directory (.adversarial/{slug}/), ".." would resolve to the
+	// project root, allowing report files to be written outside .adversarial/.
+	if planSlug == ".." || strings.Contains(planSlug, "..") {
+		return fmt.Errorf("invalid plan_slug %q: must not contain traversal sequences", planSlug)
+	}
 	return nil
 }
 

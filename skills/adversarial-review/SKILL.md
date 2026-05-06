@@ -123,8 +123,7 @@ Do NOT fall through to writing a self-review.
 
 #### Step 4c-i: Get caller model ID (for reviewer independence)
 
-Before calling `adversarial_review`, call the `crush_info` tool to determine
-your own model's full ID:
+**Call `crush_info` immediately before every `adversarial_review` call** — do not reuse a model ID from an earlier call in this session, as the active model may have changed.
 
 ```
 crush_info()
@@ -144,7 +143,7 @@ If the line is absent, the parse fails, or no `large =` line is found, log a vis
 and omit `exclude_model` (pass empty string, equivalent to no-op).
 If multiple `large =` lines appear, use the first one.
 
-Then pass it to `adversarial_review`:
+Pass the result immediately to `adversarial_review`:
 
 ```
 adversarial_review(

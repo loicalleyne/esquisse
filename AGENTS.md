@@ -354,6 +354,22 @@ Esquisse does NOT include and must NOT add:
       (arXiv:2406.05494). Affirmative imperatives engage the same constraint as an action
       rather than a prohibition, improving adherence in long-context sessions.
 
+16. **[Review loop] Over-specified task documents cause unbounded adversarial review loops.**
+    - Wrong: specifying exact framework lifecycle hook patterns, timer cleanup mechanisms,
+      browser engine quirks, and memory limits in the "In Scope" section.
+    - Right: task docs specify WHAT to build and acceptance criteria. Implementation details
+      belong in "Implementation Notes" or are left to the implementer.
+    - Why: every implementation detail gives the reviewer a new attack surface. The planner
+      fixes one issue, introduces new specificity, which the reviewer attacks from a different
+      angle — creating an infinite loop. Cap at 5 iterations; split if not converging.
+
+17. **[Review loop] Task documents covering 5+ independent concerns will not converge.**
+    - Wrong: one task covering agent state + message parts + search + large output + download.
+    - Right: one concern per task. Split early if In Scope exceeds ~15 lines or Files table
+      touches 4+ files across different features.
+    - Why: the reviewer applies 7 attacks to each concern; multiplicative complexity prevents
+      convergence. Each fix for concern A introduces reviewable text that concern B attacks.
+
 11. **`gate-review.sh` Stop hook does not fire in Crush (no Stop event yet).**
    - Wrong: assuming `gate-review.sh` blocks Crush sessions the way it blocks VS Code sessions.
    - Right: Crush users must manually run `bash scripts/gate-review.sh` before ending a

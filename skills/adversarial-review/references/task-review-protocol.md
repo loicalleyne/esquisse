@@ -213,6 +213,21 @@ AI-generated plans invent things. Find the inventions.
 
 ---
 
+## Exhaustiveness Mandate
+
+Before assigning a verdict, you MUST complete this checklist. A PASSED verdict is only valid when every item is checked.
+
+- [ ] **Every attack was applied.** You did not skip any of the 7 attacks because it seemed unlikely or the plan seemed clean.
+- [ ] **Every component was covered.** For a multi-task plan, each task was reviewed individually, not just the plan as a whole.
+- [ ] **Every sub-question was answered.** For each attack, every bullet-point sub-question in the protocol was asked of the plan — not just the first one that yielded a finding.
+- [ ] **Every CONDITIONAL finding has a Required Changes row.** No major issue is documented without a concrete Fix Type and Action.
+- [ ] **Every FAILED finding has a Required Changes row.** No critical issue is documented without a concrete Fix Type and Action.
+- [ ] **No issue was downgraded to save the plan.** Severity is determined by the issue definition table, not by how much work a fix would require.
+
+If you cannot check all items, the verdict MUST be FAILED regardless of findings.
+
+---
+
 ## Verdict Criteria
 
 After applying all 7 attacks, assign one verdict based on the most severe

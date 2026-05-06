@@ -132,7 +132,16 @@ func newAdversarialHandler(projectRoot string) func(context.Context, *mcp.CallTo
 					"added automatically by esquisse-mcp. Do NOT write any files. Do NOT write the state file.\n"+
 					"NEVER run rm, Remove-Item, or any destructive command targeting .adversarial/ or its subdirectories.\n"+
 					"NEVER delete, overwrite, or move any existing report file under .adversarial/.\n"+
-					"Report files are the permanent audit trail — only esquisse-mcp creates them.\n\n"+"Format your Required Changes section as a markdown table:\n\n"+
+					"Report files are the permanent audit trail — only esquisse-mcp creates them.\n\n"+
+				"Before assigning your verdict, complete this exhaustiveness checklist — every item must be satisfied:\n"+
+				"1. Every attack was applied. You did not skip any attack because it seemed unlikely.\n"+
+				"2. Every task in the plan was reviewed individually, not just the plan as a whole.\n"+
+				"3. Every bullet-point sub-question in the protocol was asked of the plan for each attack.\n"+
+				"4. Every CONDITIONAL finding has a Required Changes row with a concrete Fix Type and Action.\n"+
+				"5. Every FAILED finding has a Required Changes row with a concrete Fix Type and Action.\n"+
+				"6. No issue was downgraded to save the plan. Severity follows the issue definition table only.\n"+
+				"If you cannot satisfy all 6 items, the verdict MUST be FAILED.\n\n"+
+				"Format your Required Changes section as a markdown table:\n\n"+
 					"| Priority | Attack | Issue | Fix Type | Concrete Action |\n"+
 					"|---|---|---|---|---|\n\n"+
 					"Priority: BLOCKING or ADVISORY\n"+

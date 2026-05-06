@@ -56,49 +56,76 @@ If it does NOT exist but `duckdb` CLI is available: run `bash scripts/rebuild-as
 to build the cache, then use `duckdb-code`. Fall back to `grep_search` / `read_file`
 only when DuckDB is unavailable.
 
-#### Step 2b — Produce Planning Artifacts (when applicable)
+#### Step 2b — Produce Planning Artifacts
 
-For each external library or integration point needed by ≥ 2 tasks, or whose
-API surface would exceed ~400 tokens if inlined:
-1. Research the library using available tools (read go.mod, run `go doc {pkg}`,
-   fetch relevant documentation, read source). Perform actual retrieval —
-   do not rely on training data.
-2. Distill findings into a Planning Artifact at
-   `docs/artifacts/{YYYY-MM-DD}-{slug}.md` following SCHEMAS.md §10 exactly:
-   - Three-column API Surface table (Symbol | Exact Signature or Value | Source)
-   - Constraints as MUST/MUST NOT with parenthetical source
-   - `Referenced by:` as relative markdown links: `[P{n}-{nnn}-{slug}](../tasks/P{n}-{nnn}-{slug}.md)`
-   When using the `write_planning_artifact` MCP tool, pass `referenced_by` as a list
-   of workspace-relative task paths, e.g. `["docs/tasks/P2-007-foo.md"]` — NOT bare
-   IDs like `"P2-007"`.
-   When writing via `create_file` directly, construct the `Referenced by:` line manually.
-3. Record the artifact path — link it from the `## Planning Artifacts` section
-   of each task that needs it, with a "What to read from it" note.
+**MANDATORY trigger decision — evaluate before proceeding:**
+
+| Condition | Action |
+|---|---|
+| External library or integration point needed by ≥ 2 tasks | Produce artifact |
+| Research for a single task would exceed 400 tokens if inlined in Specification | Produce artifact |
+| Single-task research, ≤ 400 tokens, no sharing | Inline in Specification — no artifact |
+| Internal project code (AGENTS.md / GLOSSARY.md / llms.txt cover this) | No artifact — skip |
+
+If the trigger decision is "no artifact", skip to Step 2c.
+
+**MANDATORY retrieval rule:** Run `go doc`, read source, or fetch documentation for every fact before writing it. Training-data knowledge of library APIs is forbidden as a source. A fact with no retrieval performed in this session must be omitted entirely.
+
+For each library that requires an artifact:
+
+1. Retrieve: run `go doc {pkg} {symbol}` for each public symbol, or fetch the URL, or read the source file. Record where each fact came from.
+2. Write the artifact to `docs/artifacts/{YYYY-MM-DD}-{slug}.md` using `create_file` with this exact structure:
+
+   ```markdown
+   # Artifact: {Title}
+
+   **Primary Source:** {URL | module path | "AST analysis of {package}"}
+   **Date:** {YYYY-MM-DD}
+   **Produced by:** EsquissePlan
+   **Referenced by:** [P{n}-{nnn}-{slug}](../tasks/P{n}-{nnn}-{slug}.md), ...
+
+   ---
+
+   ## Summary
+   2-3 sentences. What this artifact covers and why it matters.
+
+   ## API Surface / Key Facts
+
+   | Symbol / Field | Exact Signature or Value | Source |
+   |---|---|---|
+   | `FuncName` | `func FuncName(arg Type) (ReturnType, error)` | `go doc pkg.FuncName` |
+
+   ## Constraints
+   MUST {rule} (source: {retrieval reference})
+   MUST NOT {rule} (source: {retrieval reference})
+
+   ## Anti-Patterns
+   - Wrong: ... / Right: ... / Why: ...
+   ```
+
+   - Every row in API Surface must have a populated Source column.
+   - A constraint with no traceable source must be omitted.
+   - When using the `write_planning_artifact` MCP tool: pass `referenced_by` as a list of workspace-relative task paths, e.g. `["docs/tasks/P2-007-foo.md"]` — NOT bare IDs.
+   - When writing via `create_file` directly: construct the `Referenced by:` line manually.
+
+3. Link the artifact from the `## Planning Artifacts` section of each task that needs it, with a "What to read from it" note.
 4. Inject the prerequisite blockquote into each task document that uses this artifact:
    - If using the `write_planning_artifact` MCP tool: injection is **automatic**.
-     The tool writes `> **Prerequisite:** Read \`{relPath}\` before writing any code
-     in this phase.` immediately after the title line of each `referenced_by` task file
-     that already exists on disk (idempotent — skips if already present; records path
-     under `not_found` if the task file does not exist yet).
-   - If writing via `create_file`: use `replace_string_in_file` to insert the blockquote
-     immediately after the title line of each affected task file.
-   - When creating a **new** task in Step 3 that references this artifact, include the
-     blockquote immediately after the task title line before filling in `## Status`.
-
-Do not produce artifacts for internal project code. AGENTS.md, GLOSSARY.md,
-llms.txt, and llms-full.txt cover internal surfaces.
+   - If using `create_file`: use `replace_string_in_file` to insert the blockquote immediately after the title line of each affected task file.
+   - For a **new** task created in Step 3: include the blockquote immediately after the task title line before `## Status`.
 
 ### Step 2c — Capture Planning Context
 
-Capture `modify`/`implement` symbols into `planning_context` before writing task docs.
+**Run after Step 3 (task IDs are required).** Capture the symbols each task will modify into `planning_context` in `code_ast.duckdb`.
 
 **Preconditions (check in order):**
-- `code_ast.duckdb` missing or any `.go` files changed since last build → `bash scripts/rebuild-ast.sh`
-- `duckdb` CLI unavailable → emit `[WARN] planning_context capture skipped` in Session Notes; skip this step
+- `code_ast.duckdb` missing or any `.go` files changed since last build → run `bash scripts/rebuild-ast.sh` first
+- `duckdb` CLI unavailable → emit `[WARN] planning_context capture skipped` in Session Notes; skip this step entirely
 
-**Per task** (full macro syntax: `scripts/macros_go.sql`):
+**Per task** — substitute `{task_id}` with the actual task ID (e.g. `P3-008`) and `{PrimarySymbol}` with the leading name of the primary type or function being modified (e.g. for `newAdversarialHandler`, use `newAdversarialHandler`):
+
 1. `DELETE FROM planning_context WHERE task_id = '{task_id}';`
-2. `INSERT INTO planning_context SELECT * FROM capture_planning_context('{task_id}', 'modify', '**/*.go', '{Symbol}%');`
+2. `INSERT INTO planning_context SELECT * FROM capture_planning_context('{task_id}', 'modify', '**/*.go', '{PrimarySymbol}%');`
 3. `SELECT count(*) FROM planning_context WHERE task_id = '{task_id}';`
    - 0 rows → emit `[WARN] 0 rows captured for {task_id}` in Session Notes
    - Any row with null signature → emit `[WARN] missing signature for {task_id}` in Session Notes
