@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-08-04T00:00:00Z",
+  "source": "test",
+  "models": [
+    {"id":"claude-sonnet-4.6","name":"Claude Sonnet 4.6","vendor":"copilot","family":"claude","version":"1"},
+    {"id":"gpt-4.1","name":"GPT-4.1","vendor":"copilot","family":"gpt-4.1","version":"1"},
+    {"id":"gpt-4o","name":"GPT-4o","vendor":"copilot","family":"gpt-4o","version":"1"},
+    {"id":"gemini-3.1-pro-preview","name":"Gemini 3.1 Pro","vendor":"gemini","family":"gemini","version":"1"},
+    {"id":"claude-opus-4-5-20251101","name":"Claude Opus 4.5","vendor":"vertexai","family":"claude","version":"1"}
+  ]
+}

@@ -3,13 +3,13 @@ name: Adversarial-r1
 description: >
   Adversarial plan reviewer, rotation slot 1. Hostile, skeptical persona.
   Applies the 7-attack protocol from task-review-protocol.md to plans and
-  task documents. Primary model: Claude Opus 4.6 (Anthropic — higher
-  capability than the EsquissePlan planner which runs on Claude Sonnet 4.6, to catch
-  issues Sonnet missed). Writes verdict to .adversarial/state.json. DO NOT
-  invoke directly — dispatched by EsquissePlan or the adversarial-review skill.
+  task documents. Runs on a model from a different family than the planner
+  and other reviewer slots — see model: frontmatter for current assignment.
+  Writes verdict to .adversarial/state.json. DO NOT invoke directly —
+  dispatched by EsquissePlan or the adversarial-review skill.
 target: vscode
 user-invocable: false
-model: ['Auto (copilot)', 'GPT-4.1 (copilot)', 'Claude Sonnet 4.6 (copilot)']
+model: ['Claude Sonnet 5 (copilot)', 'Claude Opus 4.6 (copilot)', 'Claude Sonnet 4.6 (copilot)']
 tools:
   [read/readFile, search/fileSearch, search/textSearch, search/listDirectory, edit/createFile, edit/editFiles]
 agents:

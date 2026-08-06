@@ -6,12 +6,11 @@ slots map to these models:
 
 | Slot | `iteration % 3` | `--model` flag value |
 |------|----------------|---------------------|
-| 0 | 0 | `copilot/gpt-4.1` |
-| 1 | 1 | `vertexai/claude-opus-4-5-20251101` |
-| 2 | 2 | `copilot/gpt-4o` |
+| 0 | 0 | `copilot/claude-opus-4.6` |
+| 1 | 1 | `copilot/claude-sonnet-5` |
+| 2 | 2 | `copilotcli/gpt-5.3-codex` |
 
-These mirror the VS Code rotation (Adversarial-r0 = GPT-4.1, r1 = Claude
-Opus, r2 = GPT-4o). The models are deliberately cross-provider to prevent
+These mirror the VS Code rotation (Adversarial-r0 = copilot, r1 = copilot, r2 = copilotcli). The models are deliberately cross-provider to prevent
 self-review bias.
 
 Ensure `crush` is in your PATH: verify with `which crush` before running.

@@ -8,7 +8,7 @@ description: >
   begins. Rotates the adversarial reviewer model on each revision using
   .adversarial/state.json.
 target: vscode
-model: ['Claude Sonnet 4.6 (copilot)', 'GPT-4.1 (copilot)', 'GPT-4o (copilot)']
+model: ['Claude Opus 4.7 (copilotcli)', 'Claude Sonnet 4.6 (copilot)', 'GPT-5.3-Codex (copilot)']
 tools: [vscode/memory, vscode/askQuestions, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/readNotebookCellOutput, read/terminalSelection, read/terminalLastCommand, agent, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/usages, web/fetch, godoc/get_doc, godoc/list_packages, pkggodev/getPackageInfo, pkggodev/searchPackages]
 agents:
   - Adversarial-r0
@@ -172,9 +172,9 @@ When the plan is complete:
    Read that file if it exists. If absent, use `iteration = 0`.
 2. Compute `slot = iteration % 3`.
 3. Dispatch the appropriate reviewer:
-   - slot 0 → `@Adversarial-r0` (GPT-4.1 — cross-provider)
-   - slot 1 → `@Adversarial-r1` (Claude Opus 4.6 — higher capability)
-   - slot 2 → `@Adversarial-r2` (GPT-4o — cross-provider)
+   - slot 0 → `@Adversarial-r0` (Claude Opus 4.7 (copilot))
+   - slot 1 → `@Adversarial-r1` (Claude Sonnet 5 (copilot))
+   - slot 2 → `@Adversarial-r2` (GPT-5.3-Codex (copilot))
 4. Provide the reviewer with:
    - All task documents just written
    - The original spec

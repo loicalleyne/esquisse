@@ -3,7 +3,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "wsl bash ./scripts/gate-review.sh"
+        "command": "./scripts/gate-review.sh"
       }
     ]
   }

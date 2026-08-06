@@ -1,0 +1,28 @@
+{
+  "name": "esquisse-model-sync",
+  "displayName": "Esquisse Model Sync",
+  "description": "Export available VS Code chat models and help keep Esquisse rotation config up to date.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:esquisse.exportAvailableModels"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "esquisse.exportAvailableModels",
+        "title": "Esquisse: Export Available Chat Models"
+      }
+    ]
+  },
+  "scripts": {
+    "generate:rotation": "node ./generate-rotation.mjs --models ./models.available.json --repo-root .."
+  }
+}

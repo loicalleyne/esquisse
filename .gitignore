@@ -27,3 +27,6 @@ go.work.sum
 .crush
 .adversarial/
 /esquisse-mcp/esquisse-mcp
+
+# vs code extension file
+*.vsix
